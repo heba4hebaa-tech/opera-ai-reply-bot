@@ -88,6 +88,16 @@ function setCustomerCookie(res, token) {
   res.setHeader('Set-Cookie', `op_customer=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`);
 }
 
+async function fetchImage(url, token) {
+  try {
+    const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: AbortSignal.timeout(20000) });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > 8 * 1024 * 1024) return null;
+    return { base64: buf.toString('base64'), mime: res.headers.get('content-type') || 'image/jpeg' };
+  } catch { return null; }
+}
+
 function verifyWebhookSignature(req, raw) {
   if (!config.META_APP_SECRET) return true;
   const sig = req.headers['x-hub-signature-256'];
@@ -546,7 +556,7 @@ function webhookVerify({ query, res }) {
 }
 
 add('GET', '/webhooks/whatsapp', webhookVerify);
-add('POST', '/webhooks/whatsapp', ({ req, raw, body, res }) => {
+add('POST', '/webhooks/whatsapp', async ({ req, raw, body, res }) => {
   if (!verifyWebhookSignature(req, raw)) return text(res, 401, 'Invalid signature');
   run('INSERT INTO webhook_events (platform, payload, created_at) VALUES (?,?,?)', 'meta', JSON.stringify(body).slice(0, 20000), now());
   const jobs = [];
@@ -557,10 +567,18 @@ add('POST', '/webhooks/whatsapp', ({ req, raw, body, res }) => {
         const contact = (value.contacts || []).find(c => c.wa_id === msg.from);
         const messageText = msg.text?.body || msg.button?.text ||
           msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '';
-        jobs.push(handleIncoming({
-          platform: 'whatsapp', psid: str(msg.from), name: str(contact?.profile?.name),
-          text: messageText, externalId: str(msg.id),
-        }));
+        jobs.push((async () => {
+          let image = null;
+          if (msg.image?.id) {
+            const token = waCredentials().token;
+            const meta = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/${msg.image.id}?fields=url&access_token=${encodeURIComponent(token)}`).then(r => r.json()).catch(() => ({}));
+            if (meta.url) image = await fetchImage(meta.url, token);
+          }
+          await handleIncoming({
+            platform: 'whatsapp', psid: str(msg.from), name: str(contact?.profile?.name),
+            text: messageText, externalId: str(msg.id), image,
+          });
+        })());
       }
     }
   }
@@ -633,7 +651,7 @@ add('POST', '/api/admin/simulate/facebook', async ({ body }) => {
   return { ok: true, reply: r || null };
 }, { auth: true });
 
-add('POST', '/webhooks/messenger', ({ req, raw, body, res }) => {
+add('POST', '/webhooks/messenger', async ({ req, raw, body, res }) => {
   if (!verifyWebhookSignature(req, raw)) return text(res, 401, 'Invalid signature');
   run('INSERT INTO webhook_events (platform, payload, created_at) VALUES (?,?,?)', 'meta', JSON.stringify(body).slice(0, 20000), now());
   const jobs = [];
@@ -642,10 +660,15 @@ add('POST', '/webhooks/messenger', ({ req, raw, body, res }) => {
       if (ev.message?.is_echo) continue;
       const messageText = ev.message?.text || ev.postback?.payload || ev.message?.quick_reply?.payload ||
         (ev.message?.attachments?.length ? '📎 مرفق' : '');
-      jobs.push(handleIncoming({
-        platform: 'messenger', psid: str(ev.sender?.id),
-        text: messageText, externalId: str(ev.message?.mid || ev.postback?.mid),
-      }));
+      jobs.push((async () => {
+        let image = null;
+        const url = ev.message?.attachments?.find(a => a.type === 'image')?.payload?.url;
+        if (url) image = await fetchImage(url, getSettings().messenger_page_token || config.MESSENGER_PAGE_TOKEN);
+        await handleIncoming({
+          platform: 'messenger', psid: str(ev.sender?.id),
+          text: messageText, externalId: str(ev.message?.mid || ev.postback?.mid), image,
+        });
+      })());
     }
   }
   Promise.allSettled(jobs).then(results => {

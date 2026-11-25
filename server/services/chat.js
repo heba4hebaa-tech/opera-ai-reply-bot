@@ -1,6 +1,6 @@
 'use strict';
 const { all, get, run, now, getSettings } = require('../db');
-const { askAI, ruleReply, stripTashkeel } = require('./ai');
+const { askAI, askImage, ruleReply, stripTashkeel } = require('./ai');
 const { catalogText, priceListText } = require('./catalog');
 const platforms = require('./platforms');
 
@@ -18,7 +18,11 @@ function exactCommand(text) {
   return null;
 }
 
-async function generateReply(text, history) {
+async function generateReply(text, history, image) {
+  if (image?.base64) {
+    const r = await askImage(text || 'عرّف على المنتج في الصورة', image.base64, image.mime);
+    if (r) return r;
+  }
   const cmd = exactCommand(text);
   if (cmd) return cmd;
   const s = getSettings();
@@ -29,7 +33,7 @@ async function generateReply(text, history) {
   return ruleReply(text);
 }
 
-async function handleIncoming({ platform, psid, name = '', text = '', externalId = '' , sendReply = true }) {
+async function handleIncoming({ platform, psid, name = '', text = '', externalId = '' , sendReply = true, image = null }) {
   text = String(text || '').trim();
   if (!psid || !text) return null;
   if (externalId && get('SELECT id FROM messages WHERE external_id = ? LIMIT 1', externalId)) return null;
@@ -44,7 +48,7 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
   run('INSERT INTO messages (conversation_id, direction, text, external_id, created_at) VALUES (?,?,?,?,?)', conv.id, 'in', text, externalId, now());
 
   const history = all('SELECT direction, text FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 8', conv.id).reverse();
-  const reply = await generateReply(text, history.slice(0, -1));
+  const reply = await generateReply(text, history.slice(0, -1), image);
   run('INSERT INTO messages (conversation_id, direction, text, external_id, created_at) VALUES (?,?,?,?,?)', conv.id, 'out', reply, '', now());
   run('UPDATE conversations SET updated_at = ? WHERE id = ?', now(), conv.id);
 
