@@ -71,6 +71,8 @@
       ['💰', 'إجمالي المبيعات', money(d.stats.revenue, ''), 'طلبات مدفوعة: ' + (d.stats.paidOrders ?? 0)],
       ['🚚', 'طلبات مسلّمة', String(d.stats.delivered ?? 0), ''],
       ['🧾', 'متوسط قيمة الطلب', money(d.stats.avgOrder, ''), ''],
+      ['🏷️', 'أعلى صنف مبيعات', d.stats.topCategory ? `${d.stats.topCategory[0]} — ${money(d.stats.topCategory[1]?.revenue, '')}` : '—', ''],
+      ['🔁', 'عملاء متكررون', String(d.stats.repeatCustomersCount ?? 0), ''],
     ];
     $('statGrid').innerHTML = icons.map(i => `<div class="stat-card"><div class="ic">${i[0]}</div><div><div class="num">${i[2]}</div><div class="lbl">${i[1]}</div><div class="small muted">${i[3]}</div></div></div>`).join('')
       + extra.map(i => `<div class="stat-card"><div class="ic">${i[0]}</div><div><div class="num">${i[2]}</div><div class="lbl">${i[1]}</div><div class="small muted">${i[3]}</div></div></div>`).join('');

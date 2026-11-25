@@ -181,6 +181,7 @@ add('POST', '/api/store/orders', ({ body, customer }) => {
     id: num(i.id), name: str(i.name).slice(0, 200), price: num(i.price),
     qty: Math.max(1, Math.min(99, num(i.qty))),
     options: str(i.options).slice(0, 200),
+    category: i.category ? num(i.category) : (get('SELECT category_id FROM products WHERE id=?', num(i.id))?.category_id || 0),
   }));
   const subtotal = clean.reduce((s, i) => s + i.price * i.qty, 0);
   const s2 = getSettings();
@@ -295,6 +296,30 @@ add('GET', '/api/admin/dashboard', () => {
   const topProducts = Object.entries(topMap).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, qty]) => ({ name, qty }));
   const validOrders = allOrders.filter(o => o.status && o.status !== 'ملغي');
   const avgOrder = validOrders.length ? Math.round((revenue / validOrders.length) * 100) / 100 : 0;
+  const catNames = {}; all('SELECT id, name_ar FROM categories').forEach(c => { catNames[c.id] = c.name_ar; });
+  const byCategory = {};
+  for (const o of allOrders) {
+    const items = (() => { try { return JSON.parse(o.items_json || '[]'); } catch { return []; } })();
+    const touched = [...new Set(items.map(i => Number(i.category || i.category_id || 0)).filter(Boolean))];
+    if (o.status && o.status !== 'ملغي') {
+      for (const cid of touched) {
+        const cn = catNames[cid] || 'عام';
+        const st = byCategory[cn] || (byCategory[cn] = { revenue: 0, orders: 0, items: 0 });
+        const mine = items.filter(i => Number(i.category || i.category_id || 0) === cid);
+        st.revenue += mine.reduce((s, i) => s + Number(i.price || 0) * (Number(i.qty) || 0), 0);
+        st.items += mine.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+        st.orders += 1;
+      }
+    }
+  }
+  const topCategory = Object.entries(byCategory).sort((a, b) => b[1].revenue - a[1].revenue)[0] || null;
+  const custAgg = {};
+  for (const o of allOrders) {
+    const k = String(o.customer_name || '') + '::' + String(o.phone || '');
+    if (!custAgg[k]) custAgg[k] = { name: String(o.customer_name || ''), phone: String(o.phone || ''), orders: 0 };
+    custAgg[k].orders++;
+  }
+  const repeatCustomers = Object.values(custAgg).filter(c => c.orders > 1).sort((a, b) => b.orders - a.orders).slice(0, 10);
   const ratings = all('SELECT product_id, AVG(rating) avg, COUNT(*) n FROM reviews GROUP BY product_id');
   return {
     stats: {
@@ -305,9 +330,10 @@ add('GET', '/api/admin/dashboard', () => {
       messages: get('SELECT COUNT(*) n FROM messages').n,
       customers: get('SELECT COUNT(*) n FROM customers').n,
       newOrders: get("SELECT COUNT(*) n FROM orders WHERE status='جديد'").n,
-      revenue, delivered, paidOrders, avgOrder, topProducts,
+      revenue, delivered, paidOrders, avgOrder, topProducts, byCategory, topCategory,
       avgRating: ratings.length ? Math.round((ratings.reduce((a, r) => a + Number(r.avg || 0), 0) / ratings.length) * 10) / 10 : 0,
       ratingsCount: ratings.reduce((a, r) => a + Number(r.n || 0), 0),
+      repeatCustomersCount: repeatCustomers.length,
     },
     recentOrders: all('SELECT id, customer_name, phone, total, status, source, created_at FROM orders ORDER BY id DESC LIMIT 6'),
     recentConversations: all(`SELECT c.id, c.platform, c.name, c.psid, c.updated_at,

@@ -145,7 +145,7 @@ function handleOrderDraft(conv, text) {
     run('UPDATE order_drafts SET step=?, data_json=?, updated_at=? WHERE conversation_id=?', next, JSON.stringify(data), now(), conv.id);
     return `تم ✔️ ${ORDER_LABELS[step]}: ${value}\n` + orderQuestion(next);
   }
-  const products = all('SELECT id, name_ar, price FROM products WHERE active=1');
+  const products = all('SELECT id, name_ar, price, category_id FROM products WHERE active=1');
   const words = stripTashkeel(data.product).split(/\s+/).filter(w => w.length >= 3);
   const scored = products.map(x => {
     const n = stripTashkeel(x.name_ar);
@@ -154,7 +154,7 @@ function handleOrderDraft(conv, text) {
   const p = scored[0]?.score ? scored[0].p : { id: 0, name_ar: data.product, price: 0 };
   const qty = Math.min(99, Math.max(1, Number(data.qty) || 1));
   const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, psid, paid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, data.name, data.phone, data.address, `طلب من ${conv.platform}`,
-    JSON.stringify([{ id: p.id, name: p.name_ar, price: p.price, qty, options: '' }]),
+    JSON.stringify([{ id: p.id, name: p.name_ar, price: p.price, qty, options: '', category: p.category_id }]),
     p.price * qty, 'جديد', conv.platform === 'whatsapp' ? 'واتساب' : 'مسنجر', now(), 0, String(conv.psid || conv.id), 0);
   if (p.id) run('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?', qty, p.id);
   run('DELETE FROM order_drafts WHERE conversation_id = ?', conv.id);
