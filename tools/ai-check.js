@@ -10,7 +10,7 @@ const base = process.env.BASE || 'http://localhost:3000';
   const res = await fetch(`${base}/api/admin/test-reply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: cookie },
-    body: JSON.stringify({ message: 'أحتاج مساعدتك في اختيار هدية لصديقي، هل تقدر تنصحني؟' }),
+    body: JSON.stringify({ message: 'كم سعر القميص؟' }),
   });
   const d = await res.json();
   console.log('status:', res.status);

@@ -85,7 +85,11 @@ function ruleReply(message) {
   if (/كتالوج|منتجات|المنتجات|الاصناف|catalog|ماذا تبيع|ماذا تبيعون/.test(m)) return catalogText();
   if (/سعر|الاسعار|كم|price|بكم/.test(m)) {
     const products = require('../db').all('SELECT name_ar, price, description, image_url, icon, colors_json, sizes_json FROM products WHERE active=1 ORDER BY id DESC');
-    const matched = products.find(p => p.name_ar && m.includes(require('./ai').stripTashkeel(p.name_ar)));
+    const matched = products.find(p => {
+      if (!p.name_ar) return false;
+      const words = require('./ai').stripTashkeel(p.name_ar).split(/\s+/).filter(w => w.length >= 3);
+      return words.some(w => m.includes(w));
+    });
     if (matched) {
       const money = `${Number(matched.price).toLocaleString('ar-SA')} ${s.currency || ''}`.trim();
       let out = `سعر ${matched.name_ar}: ${money} 🏷️`;
