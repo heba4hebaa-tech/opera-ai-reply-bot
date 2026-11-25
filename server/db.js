@@ -122,6 +122,30 @@ ensureColumn('orders', 'notified_whatsapp', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('customers', 'email', 'TEXT');
 ensureColumn('customers', 'verified', 'INTEGER NOT NULL DEFAULT 0');
 db.exec('CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);');
+// تحويل عمود phone إلى قيم مكررة (لإمكانية تسجيل زبائن ببريد بدون هاتف)
+try {
+  const cols = db.prepare('PRAGMA table_info(customers)').all().map(c => c.name);
+  if (cols.includes('phone') && db.prepare('PRAGMA index_list(customers)').all().some(ix => ix.name === 'sqlite_autoindex_customers_1')) {
+    db.exec('PRAGMA foreign_keys=OFF; BEGIN;');
+    const cur = db.prepare('SELECT * FROM customers').all();
+    db.exec('DROP TABLE customers');
+    db.exec(`CREATE TABLE customers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      phone TEXT NOT NULL DEFAULT '',
+      name TEXT DEFAULT '',
+      address TEXT DEFAULT '',
+      city TEXT DEFAULT '',
+      latitude REAL DEFAULT 0,
+      longitude REAL DEFAULT 0,
+      email TEXT,
+      verified INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT ''
+    )`);
+    for (const r of cur) db.prepare('INSERT INTO customers (phone, name, address, city, latitude, longitude, email, verified, created_at) VALUES (?,?,?,?,?,?,?,?,?)').run(r.phone || '', r.name || '', r.address || '', r.city || '', r.latitude || 0, r.longitude || 0, r.email || null, r.verified || 0, r.created_at || '');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);');
+    db.exec('COMMIT; PRAGMA foreign_keys=ON;');
+  }
+} catch (e) { console.warn('[db] customers migration skipped:', e.message); }
 ensureColumn('otp_codes', 'created_at', "TEXT NOT NULL DEFAULT ''");
 
 function now() { return new Date().toISOString(); }
