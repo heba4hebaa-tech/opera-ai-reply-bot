@@ -6,8 +6,10 @@ const platforms = require('./platforms');
 
 function exactCommand(text) {
   const t = stripTashkeel(text).replace(/[?!.،؟]/g, '').replace(/\s+/g, ' ');
-  if (/^(المنتجات|منتجات|كتالوج|الكتالوج|الاصناف|الأصناف|catalog|products)$/.test(t)) return catalogText();
-  if (/^(الاسعار|اسعار|السعر|السعر؟|كم السعر|price|prices)$/.test(t)) return priceListText();
+  if (/^(المنتجات|منتجات|عرض المنتجات|اعرض المنتجات|كتالوج|الكتالوج|الاصناف|الأصناف|catalog|products)$/.test(t)) return catalogText();
+  if (/^(الاسعار|اسعار|السعر|السعر؟|كم السعر|price|prices|بكم|كم السعر؟)$/.test(t)) {
+    return `ما المنتج الذي تريد معرفة سعره؟ 🏷️\nاكتب اسمه أو أرسل صورته وسأرد عليك بالسعر والخيارات.\nأو اكتب «عرض المنتجات» لرؤية الكتالوج كاملاً.`;
+  }
   if (/^(مساعدة|المساعده|help|الاوامر|القائمة|قائمة)$/.test(t)) {
     return `أقدر أساعدك في:\n• عرض المنتجات والأسعار\n• التوصيل والدفع\n• تقديم طلب\n• أي استفسار آخر\n\nاكتب سؤالك مباشرة 👇`;
   }
@@ -22,6 +24,7 @@ async function generateReply(text, history, image) {
   if (image?.base64) {
     const r = await askImage(text || 'عرّف على المنتج في الصورة', image.base64, image.mime);
     if (r) return r;
+    return 'ما المنتج الذي أرسلته؟ 📷 اكتب اسمه أو اختر «عرض المنتجات» لأريك الكتالوج وأسعرك فوراً.';
   }
   const cmd = exactCommand(text);
   if (cmd) return cmd;
