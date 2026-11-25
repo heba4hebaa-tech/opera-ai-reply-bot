@@ -40,7 +40,7 @@ async function askAI(message, history = []) {
     generationConfig: { temperature: 0.7, maxOutputTokens: 600 },
   };
   // قائمة احتياطية من النماذج المجانية حتى لا يتوقف الرد إن تغيّر اسم النموذج
-  const models = [...new Set([config.GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'].filter(Boolean))];
+  const models = [...new Set([config.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'].filter(Boolean))];
   for (const model of models) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;

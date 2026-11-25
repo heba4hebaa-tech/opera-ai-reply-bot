@@ -11,6 +11,6 @@ services:
       - key: VERIFY_TOKEN
         value: opera-ai-verify-token
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+        value: gemini-3.5-flash
       - key: SESSION_SECRET
         generateValue: true
