@@ -84,6 +84,18 @@ function ruleReply(message) {
   if (/شكر|thank|تمم/.test(m)) return `العفو 🤍 ${s.footer_text || 'يسعدنا خدمتك'}`;
   if (/كتالوج|منتجات|المنتجات|الاصناف|catalog|ماذا تبيع|ماذا تبيعون/.test(m)) return catalogText();
   if (/سعر|الاسعار|كم|price|بكم/.test(m)) {
+    const products = require('../db').all('SELECT name_ar, price, description, image_url, icon, colors_json, sizes_json FROM products WHERE active=1 ORDER BY id DESC');
+    const matched = products.find(p => p.name_ar && m.includes(require('./ai').stripTashkeel(p.name_ar)));
+    if (matched) {
+      const money = `${Number(matched.price).toLocaleString('ar-SA')} ${s.currency || ''}`.trim();
+      let out = `سعر ${matched.name_ar}: ${money} 🏷️`;
+      if (matched.description) out += `\n${matched.description}`;
+      const colors = (() => { try { return JSON.parse(matched.colors_json || '[]'); } catch { return []; } })();
+      const sizes = (() => { try { return JSON.parse(matched.sizes_json || '[]'); } catch { return []; } })();
+      if (colors.length) out += `\nالألوان: ${colors.join('، ')}`;
+      if (sizes.length) out += `\nالمقاسات: ${sizes.join('، ')}`;
+      return out;
+    }
     const t = require('./catalog').priceListText();
     return t + (s.catalog_url ? `\n\nالكتالوج: ${s.catalog_url}` : '');
   }
