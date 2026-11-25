@@ -21,18 +21,19 @@ function exactCommand(text) {
 }
 
 async function generateReply(text, history, image) {
-  if (image?.base64) {
-    const r = await askImage(text || 'عرّف على المنتج في الصورة', image.base64, image.mime);
-    if (r) return r;
-    return 'ما المنتج الذي أرسلته؟ 📷 اكتب اسمه أو اختر «عرض المنتجات» لأريك الكتالوج وأسعرك فوراً.';
-  }
-  const cmd = exactCommand(text);
-  if (cmd) return cmd;
   const s = getSettings();
+  // الذكاء الاصطناعي هو المتحدث الأساسي دائماً — الردود المحفوظة للطوارئ فقط
   if (String(s.ai_enabled) === '1') {
-    const ai = await askAI(text, history);
+    if (image?.base64) {
+      const r = await askImage(text || 'عرّف على المنتج في الصورة', image.base64, image.mime);
+      if (r) return r;
+    }
+    const ai = await askAI(text || 'الزبون أرسل صورة', history);
     if (ai) return ai;
   }
+  if (image?.base64) return 'ما المنتج الذي أرسلته؟ 📷 اكتب اسمه أو اختر «عرض المنتجات» لأريك الكتالوج وأسعرك فوراً.';
+  const cmd = exactCommand(text);
+  if (cmd) return cmd;
   return ruleReply(text);
 }
 
@@ -56,7 +57,12 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
   run('UPDATE conversations SET updated_at = ? WHERE id = ?', now(), conv.id);
 
   let sent = { ok: true, skipped: !sendReply };
-  if (sendReply) sent = await platforms.send(platform, psid, reply);
+  if (sendReply) {
+    sent = await platforms.send(platform, psid, reply);
+    if (all('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'out').n <= 1) {
+      await platforms.sendOptions(platform, psid, 'اختر ما تريد:', ['عرض المنتجات', 'أريد الطلب', 'مساعدة']);
+    }
+  }
   // ترحيب عند أول لقاء (مرة واحدة لكل محادثة)
   if (all('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'out').n === 1) {
     const settings = getSettings();

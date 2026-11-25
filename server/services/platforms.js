@@ -82,4 +82,39 @@ async function send(platform, psid, text) {
   return { ok: false, error: 'منصة غير معروفة' };
 }
 
-module.exports = { sendWhatsApp, sendMessenger, send, credentials };
+async function sendOptions(platform, to, text, buttons = ['عرض المنتجات', 'أريد الطلب', 'مساعدة']) {
+  if (platform === 'whatsapp') {
+    const { token, phoneId } = credentials();
+    if (!token || !phoneId) return { ok: false };
+    try {
+      const res = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/${phoneId}/messages`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'interactive', interactive: {
+          type: 'button', body: { text: String(text).slice(0, 180) },
+          action: { buttons: buttons.slice(0, 3).map((b, i) => ({ type: 'reply', reply: { id: `OPT_${i}`, title: b.slice(0, 18) } })) },
+        } }),
+        signal: AbortSignal.timeout(15000),
+      });
+      return { ok: res.ok };
+    } catch { return { ok: false }; }
+  }
+  if (platform === 'messenger') {
+    const s = getSettings();
+    const token = s.messenger_page_token || config.MESSENGER_PAGE_TOKEN;
+    if (!token) return { ok: false };
+    try {
+      const res = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(token)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient: { id: to }, messaging_type: 'RESPONSE', message: {
+          text: String(text).slice(0, 180),
+          quick_replies: buttons.slice(0, 3).map(b => ({ content_type: 'text', title: b.slice(0, 20), payload: b })),
+        } }),
+        signal: AbortSignal.timeout(15000),
+      });
+      return { ok: res.ok };
+    } catch { return { ok: false }; }
+  }
+  return { ok: false };
+}
+
+module.exports = { sendWhatsApp, sendMessenger, send, sendOptions, credentials };
