@@ -79,7 +79,11 @@ function handleOrderDraft(conv, text) {
   }
   const products = all('SELECT id, name_ar, price FROM products WHERE active=1');
   const words = stripTashkeel(data.product).split(/\s+/).filter(w => w.length >= 3);
-  const p = products.find(x => words.some(w => stripTashkeel(x.name_ar).includes(w))) || { id: 0, name_ar: data.product, price: 0 };
+  const scored = products.map(x => {
+    const n = stripTashkeel(x.name_ar);
+    return { p: x, score: words.reduce((s, w) => s + (n.includes(w) ? w.length : 0), 0) };
+  }).sort((a, b) => b.score - a.score);
+  const p = scored[0]?.score ? scored[0].p : { id: 0, name_ar: data.product, price: 0 };
   const qty = Math.min(99, Math.max(1, Number(data.qty) || 1));
   const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id)
     VALUES (?,?,?,?,?,?,?,?,?,?)`, data.name, data.phone, data.address, `طلب من ${conv.platform}`,
