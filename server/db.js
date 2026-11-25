@@ -89,7 +89,7 @@ function now() { return new Date().toISOString(); }
 const defaults = {
   business_name: 'متجر أوبيرا',
   currency: 'ر.س',
-  whatsapp_number: '',
+  whatsapp_number: '218945343522',
   wa_phone_number_id: '',
   wa_access_token: '',
   messenger_link: '',
