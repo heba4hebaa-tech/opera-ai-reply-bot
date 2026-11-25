@@ -195,13 +195,19 @@
       <div class="row wrap"><button type="button" class="btn btn-ghost btn-sm" id="openMap">🗺️ تحديد الموقع على الخريطة</button>
       <button type="button" class="btn btn-outline btn-sm" id="geoBtn">📡 موقعي تلقائياً</button>
       <span id="coords" class="small muted">${c.latitude ? `${Number(c.latitude).toFixed(4)}, ${Number(c.longitude).toFixed(4)}` : 'لم يتم تحديد الموقع'}</span></div>
+      <div class="form-row two"><div><label>إحداثي العرض (قابل للتعديل يدوياً)</label><input type="number" step="0.0001" id="pf_lat_v" value="${(c.latitude || 0).toFixed(4)}" style="width:100%;"></div>
+      <div><label>إحداثي الطول (قابل للتعديل يدوياً)</label><input type="number" step="0.0001" id="pf_lng_v" value="${(c.longitude || 0).toFixed(4)}" style="width:100%;"></div></div>
+      <p class="small muted">نصح بالتصحيح إذا كان موقع الخريطة غير دقيق في منطقتك.</p>
       <input type="hidden" id="pf_lat" value="${c.latitude || 0}"><input type="hidden" id="pf_lng" value="${c.longitude || 0}">
       <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary">حفظ البيانات</button></div>
     </form>`);
     m.el.querySelector('#geoBtn').onclick = () => locate(true);
     m.el.querySelector('#openMap').onclick = () => mapModal();
+    const syncManual = () => { const v = $('pf_lat_v'), l = $('pf_lng_v'); if (v) $('pf_lat').value = v.value || 0; if (l) $('pf_lng').value = l.value || 0; };
+    m.el.querySelector('#openMap').onclick = () => { syncManual(); mapModal(); };
     m.el.querySelector('#profileForm').onsubmit = async e => {
       e.preventDefault();
+      syncManual();
       const r = await api('/api/customer/profile', { method: 'PUT', body: {
         name: $('pf_name').value, city: $('pf_city').value, address: $('pf_address').value,
         latitude: Number($('pf_lat').value), longitude: Number($('pf_lng').value),
@@ -253,6 +259,7 @@
     m.el.querySelector('#pickLocation').onclick = async () => {
       latEl.value = lat; lngEl.value = lng;
       if (coordsEl) coordsEl.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      const mv = $('pf_lat_v'), mn = $('pf_lng_v'); if (mv) mv.value = lat.toFixed(4); if (mn) mn.value = lng.toFixed(4);
       try {
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
         const d = await res.json(); const a = d.address || {};

@@ -88,6 +88,11 @@ function check(name, ok, detail = '') { console.log(`${ok ? '✅' : '❌'} ${nam
   r = await call('/api/admin/backup', 'GET', undefined, adminCookie);
   results.push(check('backup includes customers', Array.isArray(r.data.customers) && r.data.customers.length > 0));
 
+  for (const platform of ['whatsapp', 'messenger', 'facebook']) {
+    r = await call(`/api/admin/simulate/${platform}`, 'POST', { psid: '12345', name: 'اختبار', message: 'ما هو سعر القميص؟' }, adminCookie);
+    results.push(check(`simulate ${platform} reply`, r.status === 200 && typeof r.data.reply === 'string' && r.data.reply.trim() !== ''));
+  }
+
   const failed = results.filter(x => !x).length;
   console.log(`\n${results.length - failed}/${results.length} نجحت`);
   process.exit(failed ? 1 : 0);

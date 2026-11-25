@@ -590,6 +590,21 @@ add('POST', '/webhooks/facebook', async ({ req, raw, body, res }) => {
   return text(res, 200, 'OK');
 });
 
+// اختبار بدون توقيع/زيارة في الأدمن (لجذب تحقق وجود الرد)
+add('POST', '/api/admin/simulate/whatsapp', async ({ body }) => {
+  const r = await handleIncoming({ platform: 'whatsapp', psid: str(body.psid || body.phone), name: str(body.name), text: str(body.message) });
+  return { ok: true, reply: r?.reply || null, sent: r?.sent || null };
+}, { auth: true });
+add('POST', '/api/admin/simulate/messenger', async ({ body }) => {
+  const r = await handleIncoming({ platform: 'messenger', psid: str(body.psid || body.user_id), name: str(body.name), text: str(body.message) });
+  return { ok: true, reply: r?.reply || null, sent: r?.sent || null };
+}, { auth: true });
+add('POST', '/api/admin/simulate/facebook', async ({ body }) => {
+  const text = str(body.message);
+  const r = await generateReply(text, []);
+  return { ok: true, reply: r || null };
+}, { auth: true });
+
 add('POST', '/webhooks/messenger', ({ req, raw, body, res }) => {
   if (!verifyWebhookSignature(req, raw)) return text(res, 401, 'Invalid signature');
   const jobs = [];
