@@ -10,6 +10,7 @@
 
   const splitOpts = v => String(v || '').split(/[،,]/).map(x => x.trim()).filter(Boolean);
   const parseOpts = v => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } };
+  const parseJsonSafe = (v, fallback) => { try { const d = JSON.parse(v || ''); return d ?? fallback; } catch { return fallback; } };
 
   async function uploadFile(file) {
     const res = await fetch('/api/admin/upload', {
@@ -167,11 +168,68 @@
       <div class="form-row two"><div><label>المخزون</label><input name="stock" type="number" value="${p.stock || 0}"></div>
       <div><label>ألوان هذا المنتج (فارغ = من الصنف)</label><input name="colors_json" value="${esc(parseOpts(p.colors_json).join('، '))}" placeholder="أحمر، أزرق"></div></div>
       <div class="form-row two"><div><label>مقاسات هذا المنتج (فارغ = من الصنف)</label><input name="sizes_json" value="${esc(parseOpts(p.sizes_json).join('، '))}" placeholder="S، M، L"></div></div>
+      <div class="form-row">
+        <label>صور المنتج (يمكن اختيار أكثر من صورة)</label>
+        <input type="file" id="prodGallery" accept="image/*" multiple>
+        <input type="hidden" name="images_json" id="prodImagesJson" value="${esc(p.images_json || '[]')}">
+        <div id="prodGalleryPreview" class="row wrap" style="margin-top:8px;"></div>
+      </div>
+      <div class="form-row">
+        <label>صورة لكل لون (عند اختيار اللون تتغير الصورة)</label>
+        <input type="hidden" name="color_images_json" id="prodColorImagesJson" value="${esc(p.color_images_json || '{}')}">
+        <div id="colorImages"></div>
+      </div>
       <div class="form-row check"><input type="checkbox" name="active" ${p.active === 0 ? '' : 'checked'}><label>ظاهر للزبائن</label></div>
       <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary">حفظ</button></div>
     </form>`, { wide: true });
     bindUpload('prodImageFile', 'prodImageUrl', 'prodImagePreview');
     bindUpload('prodIconFile', 'prodIcon', 'prodIconPreview');
+
+    let gallery = parseJsonSafe($('prodImagesJson').value, []);
+    let colorMap = parseJsonSafe($('prodColorImagesJson').value, {});
+    const colorsInput = m.el.querySelector('[name=colors_json]');
+
+    function renderGallery() {
+      $('prodGalleryPreview').innerHTML = gallery.map((u, i) => `<div class="center" style="position:relative;">
+        <img src="${esc(u)}" style="width:76px;height:76px;object-fit:cover;border-radius:9px;">
+        <button type="button" class="icon-btn" data-rm="${i}" style="position:absolute;top:-6px;left:-6px;background:#fff;">✕</button></div>`).join('');
+      $('prodGalleryPreview').querySelectorAll('[data-rm]').forEach(b => b.onclick = () => {
+        gallery.splice(Number(b.dataset.rm), 1);
+        $('prodImagesJson').value = JSON.stringify(gallery); renderGallery();
+      });
+    }
+    function renderColorRows() {
+      const colors = splitOpts(colorsInput.value);
+      $('colorImages').innerHTML = colors.length ? colors.map(c => `<div class="row wrap" style="padding:7px 0;border-bottom:1px solid #f0f3f7;">
+        <span class="pill">${esc(c)}</span>
+        <input type="file" accept="image/*" data-color="${esc(c)}" style="width:auto;max-width:150px;">
+        <input type="text" data-color-url="${esc(c)}" value="${esc(colorMap[c] || '')}" placeholder="رابط الصورة أو ارفع ملف" style="flex:1;min-width:140px;">
+        ${colorMap[c] ? `<img src="${esc(colorMap[c])}" style="width:42px;height:42px;object-fit:cover;border-radius:8px;">` : ''}
+      </div>`).join('') : `<div class="small muted">اكتب الألوان في الحقل أعلاه لتظهر هنا إمكانية ربط صورة بكل لون.</div>`;
+    }
+    $('prodGallery').onchange = async e => {
+      for (const f of Array.from(e.target.files || [])) {
+        try { gallery.push(await uploadFile(f)); } catch (err) { toast(err.message, true); }
+      }
+      $('prodImagesJson').value = JSON.stringify(gallery); renderGallery(); toast('تمت إضافة الصور ✓');
+      e.target.value = '';
+    };
+    $('colorImages').onchange = async e => {
+      const t = e.target;
+      if (!t.matches('input[type=file][data-color]') || !t.files[0]) return;
+      try {
+        colorMap[t.dataset.color] = await uploadFile(t.files[0]);
+        $('prodColorImagesJson').value = JSON.stringify(colorMap); renderColorRows(); toast(`صورة ${t.dataset.color} جاهزة ✓`);
+      } catch (err) { toast(err.message, true); }
+    };
+    $('colorImages').oninput = e => {
+      if (!e.target.matches('input[data-color-url]')) return;
+      colorMap[e.target.dataset.colorUrl] = e.target.value;
+      $('prodColorImagesJson').value = JSON.stringify(colorMap);
+    };
+    colorsInput.oninput = renderColorRows;
+    renderGallery(); renderColorRows();
+
     m.el.querySelector('#prodForm').addEventListener('submit', async e => {
       e.preventDefault();
       const f = new FormData(e.target);
@@ -181,6 +239,8 @@
         old_price: Number(f.get('old_price')), stock: Number(f.get('stock')), image_url: f.get('image_url'),
         colors_json: JSON.stringify(splitOpts(f.get('colors_json'))),
         sizes_json: JSON.stringify(splitOpts(f.get('sizes_json'))),
+        images_json: f.get('images_json') || '[]',
+        color_images_json: f.get('color_images_json') || '{}',
         active: f.get('active') === 'on',
       };
       const r = await api(p.id ? '/api/admin/products/' + p.id : '/api/admin/products', { method: p.id ? 'PUT' : 'POST', body: payload });

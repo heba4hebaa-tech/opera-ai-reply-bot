@@ -6,6 +6,7 @@
   const icons = v => (String(v || '').startsWith('/') || /^https?:/.test(v))
     ? `<img src="${esc(v)}" alt="" onerror="this.style.display='none'">` : esc(v || '🛍️');
   const splitOpts = v => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } };
+  const parseJson = (v, fallback) => { try { const d = JSON.parse(v || ''); return d ?? fallback; } catch { return fallback; } };
 
   function saveCart() { localStorage.setItem('opera_cart', JSON.stringify(state.cart)); renderCart(); }
 
@@ -58,13 +59,22 @@
       const cat = catOf(p.category_id);
       const colors = splitOpts(p.colors_json).length ? splitOpts(p.colors_json) : (cat ? splitOpts(cat.colors_json) : []);
       const sizes = splitOpts(p.sizes_json).length ? splitOpts(p.sizes_json) : (cat ? splitOpts(cat.sizes_json) : []);
+      const gallery = parseJson(p.images_json, []);
+      const images = gallery.length ? gallery : (p.image_url ? [p.image_url] : []);
+      const colorMap = parseJson(p.color_images_json, {});
+      const first = colorMap[colors[0]] || images[0] || p.icon;
       const out = Number(p.stock) <= 0;
       const opts = (colors.length || sizes.length) ? `<div class="product-info" style="padding:0 14px 6px;">
         ${colors.length ? `<label class="small">اللون</label><select data-color="${p.id}" class="small">${colors.map(c => `<option>${esc(c)}</option>`).join('')}</select>` : ''}
         ${sizes.length ? `<label class="small">المقاس</label><select data-size="${p.id}" class="small">${sizes.map(s => `<option>${esc(s)}</option>`).join('')}</select>` : ''}
       </div>` : '';
+      const thumbs = images.length > 1 ? `<div class="row wrap" style="padding:6px 12px 2px;gap:6px;">
+        ${images.map((u, i) => `<button type="button" data-thumb="${p.id}" data-i="${i}" style="border:0;background:none;padding:0;">
+          <img src="${esc(u)}" style="width:38px;height:38px;object-fit:cover;border-radius:7px;border:2px solid ${i === 0 ? 'var(--teal)' : 'transparent'};"></button>`).join('')}
+      </div>` : '';
       return `<article class="product-card${out ? ' stock-out' : ''}">
-        <div class="product-img">${icons(p.image_url || p.icon)}</div>
+        <div class="product-img" id="pimg-${p.id}">${icons(first)}</div>
+        ${thumbs}
         <div class="product-info"><h3>${esc(p.name_ar)}</h3><p>${esc(p.description || 'بدون وصف')}</p>
           <div class="price">${money(p.price, cur)}${p.old_price ? `<s>${money(p.old_price, cur)}</s>` : ''}</div>
           <div class="product-foot"><span class="small muted">${out ? 'نفد المخزون' : `المتوفر: ${p.stock}`}</span>
@@ -72,6 +82,23 @@
         </div>${opts}
       </article>`;
     }).join('');
+    const setImage = (id, url) => { const el = $(`pimg-${id}`); if (el) el.innerHTML = icons(url); };
+    $('productGrid').querySelectorAll('[data-color]').forEach(s => s.onchange = () => {
+      const id = Number(s.dataset.color);
+      const p = state.products.find(x => x.id === id);
+      const map = parseJson(p?.color_images_json, {});
+      const gallery = parseJson(p?.images_json, []);
+      setImage(id, map[s.value] || gallery[0] || p?.image_url || p?.icon);
+    });
+    $('productGrid').querySelectorAll('[data-thumb]').forEach(b => b.onclick = () => {
+      const id = Number(b.dataset.thumb);
+      const p = state.products.find(x => x.id === id);
+      const gallery = parseJson(p?.images_json, []);
+      const url = gallery[Number(b.dataset.i)];
+      setImage(id, url);
+      b.parentElement.querySelectorAll('[data-thumb] img').forEach(im => im.style.border = '2px solid transparent');
+      b.querySelector('img').style.border = '2px solid var(--teal)';
+    });
     $('productGrid').querySelectorAll('[data-add]').forEach(b => b.onclick = () => {
       const id = Number(b.dataset.add);
       const color = $(`[data-color="${id}"]`)?.value || '';

@@ -42,6 +42,23 @@ function check(name, ok, detail = '') { console.log(`${ok ? '✅' : '❌'} ${nam
   const upData = await up.json();
   results.push(check('image upload', up.ok && upData.url && upData.url.startsWith('/uploads/'), upData.url));
 
+  const up2 = await fetch(base + '/api/admin/upload', {
+    method: 'POST', headers: { 'Content-Type': 'image/png', 'X-File-Name': 'blue.png', Cookie: adminCookie }, body: png,
+  });
+  const up2Data = await up2.json();
+  r = await call('/api/admin/products/' + p.id, 'PUT', {
+    name_ar: 'قميص تجريبي', price: 50, stock: 10, active: true,
+    colors_json: JSON.stringify(['أحمر', 'أزرق']), sizes_json: JSON.stringify(['S', 'M']),
+    images_json: JSON.stringify([upData.url, up2Data.url]),
+    color_images_json: JSON.stringify({ 'أحمر': upData.url, 'أزرق': up2Data.url }),
+  }, adminCookie);
+  results.push(check('save gallery and color images', r.status === 200));
+
+  r = await call('/api/store/products');
+  const gp = r.data.items.find(x => x.name_ar === 'قميص تجريبي');
+  results.push(check('store returns gallery/color images',
+    !!gp && gp.images_json.includes(upData.url) && gp.color_images_json.includes('أزرق')));
+
   r = await call('/api/customer/send-code', 'POST', { phone: '+218945343522' });
   const code = r.data.demoCode; results.push(check('send OTP', r.status === 200 && !!code, code));
 

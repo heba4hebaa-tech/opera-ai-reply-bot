@@ -147,7 +147,7 @@ add('GET', '/api/store/categories', () => ({
 add('GET', '/api/store/products', ({ query }) => {
   const cat = Number(query.get('category') || 0);
   const q = str(query.get('q') || '');
-  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json';
+  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json';
   const rows = cat
     ? all(`SELECT ${fields} FROM products WHERE active=1 AND category_id=? ORDER BY id DESC`, cat)
     : all(`SELECT ${fields} FROM products WHERE active=1 ORDER BY id DESC`);
@@ -303,18 +303,18 @@ add('GET', '/api/admin/products', () => ({
 add('POST', '/api/admin/products', ({ body }) => {
   const name = str(body.name_ar);
   if (!name) return { status: 400, body: { error: 'اسم المنتج مطلوب' } };
-  const info = run(`INSERT INTO products (category_id,name_ar,name_en,description,price,old_price,image_url,icon,stock,active,colors_json,sizes_json,created_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  const info = run(`INSERT INTO products (category_id,name_ar,name_en,description,price,old_price,image_url,icon,stock,active,colors_json,sizes_json,images_json,color_images_json,created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     num(body.category_id) || null, name, str(body.name_en), str(body.description), num(body.price), num(body.old_price),
     str(body.image_url), str(body.icon) || '🛍️', num(body.stock), body.active === false ? 0 : 1,
-    str(body.colors_json), str(body.sizes_json), now());
+    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), now());
   return { ok: true, id: Number(info.lastInsertRowid) };
 }, { auth: true });
 add('PUT', '/api/admin/products/:id', ({ params, body }) => {
-  run(`UPDATE products SET category_id=?,name_ar=?,name_en=?,description=?,price=?,old_price=?,image_url=?,icon=?,stock=?,active=?,colors_json=?,sizes_json=? WHERE id=?`,
+  run(`UPDATE products SET category_id=?,name_ar=?,name_en=?,description=?,price=?,old_price=?,image_url=?,icon=?,stock=?,active=?,colors_json=?,sizes_json=?,images_json=?,color_images_json=? WHERE id=?`,
     num(body.category_id) || null, str(body.name_ar), str(body.name_en), str(body.description), num(body.price), num(body.old_price),
     str(body.image_url), str(body.icon) || '🛍️', num(body.stock), body.active === false ? 0 : 1,
-    str(body.colors_json), str(body.sizes_json), num(params.id));
+    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), num(params.id));
   return { ok: true };
 }, { auth: true });
 add('DELETE', '/api/admin/products/:id', ({ params }) => {
