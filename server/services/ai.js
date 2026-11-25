@@ -182,4 +182,46 @@ function ruleReply(message) {
   return `وصلني سؤالك 🤍 خليني أساعدك بشكل أدق: أقدر أعرض لك المنتجات وأسعارها، أو أجهّز لك طلبك مباشرة. اختار من الأزرار بالأسفل وسأكمل معك فوراً.`;
 }
 
-module.exports = { askAI, askImage, ruleReply, stripTashkeel };
+function localSmartReply(text, history = []) {
+  const s = getSettings();
+  const cur = s.currency || '';
+  const m = stripTashkeel(text);
+  const products = require('../db').all('SELECT id, name_ar, category_id, description, price, colors_json, sizes_json, image_url FROM products WHERE active=1 ORDER BY id DESC');
+  const cats = require('../db').all('SELECT id, name_ar FROM categories WHERE active=1');
+  const money = n => `${Number(n).toLocaleString('ar-SA')} ${cur}`.trim();
+  const opts = v => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } };
+  const words = m.split(/\s+/).filter(w => w.length >= 3);
+  const scored = products.map(p => {
+    const n = stripTashkeel(p.name_ar);
+    return { p, score: words.reduce((sum, w) => sum + (n.includes(w) ? w.length : 0), 0) };
+  }).sort((a, b) => b.score - a.score);
+  const hit = scored[0]?.score ? scored[0].p : null;
+
+  if (hit) {
+    const colors = opts(hit.colors_json), sizes = opts(hit.sizes_json);
+    let out = `${hit.name_ar} — ${money(hit.price)} 🏷️`;
+    if (hit.description) out += `\n${hit.description}`;
+    if (colors.length) out += `\nالألوان المتاحة: ${colors.join('، ')}`;
+    if (sizes.length) out += `\nالمقاسات: ${sizes.join('، ')}`;
+    const alts = scored.filter(x => x.p.id !== hit.id && x.score > 0).slice(0, 2).map(x => x.p);
+    if (alts.length) out += `\nقد يعجبك أيضاً: ${alts.map(p => `${p.name_ar} (${money(p.price)})`).join(' · ')}`;
+    out += '\nأجهّز لك الطلب فوراً، اختر اللون والمقاس 👇';
+    return out;
+  }
+  if (close(m, ['سعر', 'اسعار', 'كم', 'price', 'بكم'])) {
+    const top = products.slice(0, 3);
+    if (top.length) return `${top.map(p => `${p.name_ar}: ${money(p.price)}`).join('\n')}\nأي واحد تفضل؟ أقدر أخصّصه لك فوراً 🤍`;
+    return 'الكتالوج فارغ حالياً — أضف منتجات من لوحة الأدمن.';
+  }
+  if (close(m, ['طلب', 'اطلب', 'شراء', 'order'])) return 'تمام، خلينا نجهّز طلبك 🛒 اكتب «أريد الطلب» وسأسألك خطوة بخطوة (المنتج، الكمية، اسمك، الجوال، العنوان).';
+  if (close(m, ['منتجات', 'كتالوج', 'catalog', 'اصناف'])) {
+    return `عندنا ${products.length} منتجات في ${cats.length} أصناف:\n${products.slice(0, 5).map(p => `• ${p.name_ar} — ${money(p.price)}`).join('\n')}\nقل لي أي واحد تريد وسأعطيك تفاصيله 🤍`;
+  }
+  if (history.length) {
+    const last = history.filter(h => h.direction === 'in').slice(-1)[0];
+    if (last) return localSmartReply(last.text, history.slice(0, -1));
+  }
+  return `وصلني سؤالك 🤍 أقدر أساعدك بالمنتجات والأسعار وتجهيز الطلب — اختر من الأزرار بالأسفل.`;
+}
+
+module.exports = { askAI, askImage, ruleReply, localSmartReply, stripTashkeel };

@@ -1,6 +1,6 @@
 'use strict';
 const { all, get, run, now, getSettings } = require('../db');
-const { askAI, askImage, ruleReply, stripTashkeel } = require('./ai');
+const { askAI, askImage, ruleReply, localSmartReply, stripTashkeel } = require('./ai');
 const { catalogText, priceListText } = require('./catalog');
 const platforms = require('./platforms');
 
@@ -28,7 +28,7 @@ async function generateReply(text, history, image) {
     }
     const ai = await askAI(text || 'الزبون أرسل صورة', history);
     if (ai) return ai;
-    return 'لحظة واحدة من فضلك 🤍 تعذّر الوصول للرد الذكي الآن، أعد إرسال رسالتك أو اختر من الأزرار بالأسفل.';
+    return localSmartReply(text || 'مساعدة', history);
   }
   if (image?.base64) return 'ما المنتج الذي أرسلته؟ 📷 اكتب اسمه أو اختر «عرض المنتجات» لأريك الكتالوج وأسعرك فوراً.';
   // وضع الردود الجاهزة يعمل فقط إذا أوقف الزبون الذكاء الاصطناعي صراحةً
