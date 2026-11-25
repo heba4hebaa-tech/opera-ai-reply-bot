@@ -12,6 +12,8 @@ const { creds: fbCreds, sendPagePost, replyPost, replyComment, graph: fbGraph } 
 // ------------------------- helpers -------------------------
 const str = v => String(v ?? '').trim();
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDate = iso => iso ? new Date(iso).toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
 function json(res, code, data, headers = {}) {
   res.writeHead(code, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, headers));
