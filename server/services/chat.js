@@ -28,10 +28,10 @@ async function generateReply(text, history, image) {
     }
     const ai = await askAI(text || 'الزبون أرسل صورة', history);
     if (ai) return ai;
+    return 'لحظة واحدة من فضلك 🤍 تعذّر الوصول للرد الذكي الآن، أعد إرسال رسالتك أو اختر من الأزرار بالأسفل.';
   }
   if (image?.base64) return 'ما المنتج الذي أرسلته؟ 📷 اكتب اسمه أو اختر «عرض المنتجات» لأريك الكتالوج وأسعرك فوراً.';
-  const cmd = exactCommand(text);
-  if (cmd) return cmd;
+  // وضع الردود الجاهزة يعمل فقط إذا أوقف الزبون الذكاء الاصطناعي صراحةً
   return ruleReply(text);
 }
 
@@ -122,7 +122,7 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
     }
   }
   // ترحيب عند أول لقاء (مرة واحدة لكل محادثة)
-  if (all('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'out').n === 1) {
+  if (String(getSettings().ai_enabled) !== '1' && all('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'out').n === 1) {
     const settings = getSettings();
     const welcome = String(settings.greeting || '').replace('{business}', settings.business_name || 'متجرنا');
     if (welcome) await platforms.send(platform, psid, welcome);
