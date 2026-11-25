@@ -149,8 +149,12 @@
 
   // ------------------------- customer login -------------------------
   function loginModal(after) {
-    const m = modal('دخول الزبون 👤', `<div id="loginStep1">
-      <p class="small muted">أدخل رقم جوالك وسنرسل لك رمز تحقق من ٦ أرقام.</p>
+    const m = modal('دخول الزبون 👤', `<div id="loginEmail">
+      <p class="small muted">سجّل بالبريد الإلكتروني — مجاني بلا كود SMS.</p>
+      <div class="form-row"><label>البريد الإلكتروني</label><input id="loginEmailBox" type="email" dir="ltr" required></div>
+      <button class="btn btn-primary" id="signInEmail">سجّل بالبريد الإلكتروني</button></div>
+      <hr style="margin:16px 0;"><div id="loginStep1">
+      <p class="small muted">أو سجّل برقم الجوال — سنرسل لك رمز تحقق من ٦ أرقام (وضع تجربة هنا).</p>
       <div class="form-row"><label>رقم الجوال</label><input id="loginPhone" dir="ltr" placeholder="2189xxxxxxxx"></div>
       <button class="btn btn-primary" id="sendCode">إرسال الرمز</button></div>
       <div id="loginStep2" class="hidden">
@@ -158,11 +162,17 @@
       <div id="demoCode" class="small pill warn"></div>
       <button class="btn btn-primary" id="verifyCode" style="margin-top:12px;">تأكيد الرمز</button>
       <button class="btn btn-ghost btn-sm" id="resendCode" style="margin-top:8px;">إرسال رمز جديد</button></div>`);
+    const done = () => { state.customer = true; renderCustomer(); m.close(); profileModal(); if (after) after(); };
+    m.el.querySelector('#signInEmail').onclick = async () => {
+      const r = await api('/api/customer/signin-email', { method: 'POST', body: { email: $('loginEmailBox').value } });
+      if (r.ok) { state.customer = r.customer; renderCustomer(); toast('تم تسجيل الدخول بالبريد ✓'); profileModal(); if (after) after(); m.close(); }
+      else toast(r.error || 'تعذر الدخول', true);
+    };
     const send = async () => {
       const r = await api('/api/customer/send-code', { method: 'POST', body: { phone: $('loginPhone').value } });
       if (!r.ok) { toast(r.error || 'تعذر الإرسال', true); return; }
       $('loginStep1').classList.add('hidden'); $('loginStep2').classList.remove('hidden');
-      $('demoCode').textContent = `رمز التجربة: ${r.demoCode} (يظهر هنا لأنه لا يوجد مزوّد SMS مجاني)`;
+      $('demoCode').textContent = `رمز التجربة: ${r.demoCode}`;
       toast('تم إرسال الرمز');
     };
     m.el.querySelector('#sendCode').onclick = send;
@@ -171,8 +181,7 @@
       const r = await api('/api/customer/verify', { method: 'POST', body: { phone: $('loginPhone').value, code: $('loginCode').value } });
       if (!r.ok) { toast(r.error || 'رمز غير صحيح', true); return; }
       state.customer = r.customer; renderCustomer(); m.close(); toast('تم تسجيل الدخول ✓');
-      profileModal();
-      if (after) after();
+      profileModal(); if (after) after();
     };
   }
 

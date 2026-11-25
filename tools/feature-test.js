@@ -73,6 +73,12 @@ function check(name, ok, detail = '') { console.log(`${ok ? '✅' : '❌'} ${nam
   r = await call('/api/customer/me', 'GET', undefined, customerCookie);
   results.push(check('customer me', r.data.customer?.name === 'زبون تجريبي'));
 
+  r = await call('/api/customer/signin-email', 'POST', { email: 'musteras@example.com' });
+  const customerCookie2 = r.cookie;
+  results.push(check('signin by email', r.status === 200 && r.data.customer?.email === 'musteras@example.com'));
+  r = await call('/api/customer/me', 'GET', undefined, customerCookie2);
+  results.push(check('me with email login', r.data.customer?.email === 'musteras@example.com'));
+
   r = await call('/api/store/orders', 'POST', {
     customer_name: 'زبون تجريبي', phone: '+218945343522', address: 'طرابلس',
     items_json: JSON.stringify([{ id: p.id, name: p.name_ar, price: 50, qty: 2, options: 'أحمر / M' }]),

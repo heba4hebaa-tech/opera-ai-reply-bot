@@ -84,7 +84,7 @@ CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 CREATE TABLE IF NOT EXISTS customers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  phone TEXT NOT NULL UNIQUE,
+  phone TEXT NOT NULL DEFAULT '' UNIQUE,
   name TEXT DEFAULT '',
   city TEXT DEFAULT '',
   address TEXT DEFAULT '',
@@ -119,6 +119,9 @@ ensureColumn('orders', 'latitude', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'longitude', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'notified_messenger', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('orders', 'notified_whatsapp', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('customers', 'email', 'TEXT');
+ensureColumn('customers', 'verified', 'INTEGER NOT NULL DEFAULT 0');
+db.exec('CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);');
 ensureColumn('otp_codes', 'created_at', "TEXT NOT NULL DEFAULT ''");
 
 function now() { return new Date().toISOString(); }
