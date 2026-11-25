@@ -41,6 +41,8 @@ function buildKnowledge() {
   lines.push(`العملة: ${s.currency || 'ر.س'}`);
   if (s.whatsapp_number) lines.push(`رقم واتساب المتجر: ${s.whatsapp_number}`);
   if (s.catalog_url) lines.push(`رابط الكتالوج: ${s.catalog_url}`);
+  if (s.business_hours) lines.push(`ساعات العمل: ${s.business_hours}`);
+  if (s.return_policy) lines.push(`سياسة الإرجاع أو الاستبدال: ${s.return_policy}`);
   lines.push(`طريقة الرد المطلوبة: ${s.bot_tone || 'ودود ومختصر'}`);
   if (s.greeting) lines.push(`رسالة الترحيب التي يفضلها المتجر: ${s.greeting.replace('{business}', s.business_name || 'متجرنا')}`);
   lines.push('\nالأصناف: ' + (cats.map(c => c.name_ar).join('، ') || 'لا يوجد'));

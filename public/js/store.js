@@ -127,7 +127,9 @@
       $('cartTotal').textContent = money(0, cur); $('checkoutBtn').disabled = true; return;
     }
     $('checkoutBtn').disabled = false;
-    $('cartTotal').textContent = money(state.cart.reduce((s, i) => s + i.price * i.qty, 0), cur);
+    const subtotal = state.cart.reduce((s, i) => s + i.price * i.qty, 0);
+    const fee = subtotal >= (state.info.deliveryFreeThreshold || 0) ? 0 : (state.info.deliveryFee || 0);
+    $('cartTotal').textContent = money(subtotal + fee, cur);
     $('cartItems').innerHTML = state.cart.map(i => `<div class="cart-item">
       <div class="thumb">${icons(i.icon)}</div>
       <div class="grow"><b class="small">${esc(i.name)}</b>${i.options ? `<div class="small muted">${esc(i.options)}</div>` : ''}<div class="small muted">${money(i.price, cur)}</div></div>
@@ -277,6 +279,7 @@
     if (!state.customer) { loginModal(() => checkout()); return; }
     const c = state.customer;
     const cur = state.info.currency || '';
+    const fee = state.cart.reduce((s, i) => s + i.price * i.qty, 0) >= (state.info.deliveryFreeThreshold || 0) ? 0 : (state.info.deliveryFee || 0);
     const m = modal('إتمام الطلب 🧾', `<form id="checkoutForm">
       <div class="form-row two"><div><label>الاسم</label><input id="co_name" value="${esc(c.name || '')}" required></div>
       <div><label>الجوال</label><input id="co_phone" dir="ltr" value="${esc(c.phone)}" required></div></div>
@@ -291,7 +294,9 @@
       <p class="small muted">${esc(state.info.deliveryNote || '')}</p>
       <div class="form-row" style="margin-top:12px;"><label>ملاحظات</label><textarea id="co_notes" style="min-height:70px;"></textarea></div>
       <div class="card" style="box-shadow:none;background:#f6f9fb;padding:12px;"><div class="between">
-        <span>الإجمالي</span><b style="color:var(--teal-dark);font-size:18px;">${money(state.cart.reduce((s,i)=>s+i.price*i.qty,0), cur)}</b></div></div>
+        <span>المجموع الفرعي</span><b style="color:var(--teal-dark);font-size:14px;">${money(state.cart.reduce((s,i)=>s+i.price*i.qty,0), cur)}</b></div>
+        <div class="between" style="margin-top:6px;"><span>رسوم التوصيل</span><b style="font-size:14px;">${money(fee, cur)}</b></div>
+        <div class="between" style="margin-top:6px;"><span><b>الإجمالي</b></span><b style="color:var(--teal-dark);font-size:18px;">${money(state.cart.reduce((s,i)=>s+i.price*i.qty,0) + fee, cur)}</b></div></div>
       <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary" type="submit">تأكيد الطلب</button></div>
     </form>`);
     m.el.querySelector('#coMap').onclick = () => mapModal();

@@ -152,6 +152,7 @@ add('GET', '/api/store/info', () => {
     catalogUrl: s.catalog_url, logoUrl: s.logo_url,
     deliveryFee: num(s.delivery_fee), deliveryFreeThreshold: num(s.delivery_free_threshold),
     deliveryNote: s.delivery_note, deliveryMethods: String(s.delivery_methods || '').split('،').map(x => x.trim()).filter(Boolean),
+    businessHours: s.business_hours, returnPolicy: s.return_policy,
   };
 });
 
@@ -186,11 +187,11 @@ add('POST', '/api/store/orders', ({ body, customer }) => {
   const method = str(body.delivery_method) || 'توصيل للمنزل';
   const fee = method === 'توصيل للمنزل' && subtotal < num(s2.delivery_free_threshold) ? num(s2.delivery_fee) : 0;
   const total = subtotal + fee;
-  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, latitude, longitude, delivery_fee, delivery_method)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, latitude, longitude, delivery_fee, delivery_method) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     name.slice(0, 120), phone.slice(0, 40), str(body.address).slice(0, 300), str(body.notes).slice(0, 500),
     JSON.stringify(clean), total, 'جديد', 'المتجر', now(), customer?.id || 0,
     num(customer?.latitude || body.latitude), num(customer?.longitude || body.longitude), fee, method);
+  for (const i of clean) { if (i.id > 0) run('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?', i.qty, i.id); }
   return { ok: true, orderId: Number(info.lastInsertRowid), total };
 });
 
@@ -361,11 +362,25 @@ add('GET', '/api/admin/orders', ({ query }) => {
     : all('SELECT * FROM orders ORDER BY id DESC');
   return { items: rows.map(o => ({ ...o, items: JSON.parse(o.items_json || '[]') })) };
 }, { auth: true });
-add('PUT', '/api/admin/orders/:id', ({ params, body }) => {
+add('PUT', '/api/admin/orders/:id', async ({ params, body }) => {
+  const id = num(params.id);
+  const o = get('SELECT * FROM orders WHERE id=?', id);
+  if (!o) return { status: 404, body: { error: 'الطلب غير موجود' } };
   const allowed = ['جديد', 'قيد التحضير', 'تم الإرسال', 'تم الشحن', 'مكتمل', 'ملغي'];
   const status = str(body.status);
   if (!allowed.includes(status)) return { status: 400, body: { error: 'حالة غير صالحة' } };
-  run('UPDATE orders SET status=? WHERE id=?', status, num(params.id));
+  const changed = status !== o.status;
+  run('UPDATE orders SET status=? WHERE id=?', status, id);
+  if (changed) {
+    let itemsLine = '';
+    try { itemsLine = JSON.parse(o.items_json || '[]').map(i => `${i.name} ×${i.qty}`).join('، '); } catch {}
+    const msg = `🔔 تحديث طلبك رقم #${id}\nالحالة الجديدة: ${status}\n${itemsLine ? 'المنتجات: ' + itemsLine + '\n' : ''}شكراً لثقتك 🤍`;
+    const { platforms } = { platforms: require('./services/platforms') };
+    const w = await platforms.sendWhatsApp(o.phone, msg);
+    const m = o.psid ? await platforms.sendMessenger(o.psid, msg) : { ok: false };
+    if (w.ok) run(`UPDATE orders SET notified_whatsapp=1 WHERE id=?`, id);
+    if (m.ok) run(`UPDATE orders SET notified_messenger=1 WHERE id=?`, id);
+  }
   return { ok: true };
 }, { auth: true });
 add('DELETE', '/api/admin/orders/:id', ({ params }) => {
@@ -424,7 +439,7 @@ add('DELETE', '/api/admin/faqs/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
-const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
 add('GET', '/api/admin/settings', () => {
   const s = getSettings();
   const out = {}; SETTING_KEYS.forEach(k => out[k] = s[k] ?? '');

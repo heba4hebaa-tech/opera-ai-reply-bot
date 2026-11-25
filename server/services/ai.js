@@ -175,6 +175,8 @@ function ruleReply(message) {
     const faq = require('../db').all("SELECT answer FROM faqs WHERE active=1 AND question LIKE '%دفع%' LIMIT 1")[0];
     return faq ? faq.answer : 'يمكن الدفع عند الاستلام أو تحويل بنكي.';
   }
+  if (/ساعات|hours|مواعيد|التشغيل|الاغلاق/.test(m)) return `ساعات عمل ${getSettings().business_name || 'المتجر'}: ${getSettings().business_hours || 'السبت – الخميس: ٩ ص – ٩ م'} 🤍`;
+  if (/ارجاع|استبدال|return|refund|استرداد/.test(m)) return getSettings().return_policy || 'يمكن استبدال أو إرجاع المنتج خلال ١٤ يوماً من تاريخ الاستلام.';
   if (/مساعدة|help|الاوامر|قائمة/.test(m)) {
     return `أقدر أساعدك في:\n• المنتجات والأسعار\n• التوصيل والدفع\n• تقديم طلب\n• أي سؤال آخر\n\nاكتب سؤالك مباشرة 👇`;
   }

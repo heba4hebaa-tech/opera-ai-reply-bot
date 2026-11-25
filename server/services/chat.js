@@ -47,6 +47,34 @@ const ORDER_FIELDS = ['product', 'qty', 'name', 'phone', 'address'];
 const ORDER_LABELS = {
   product: 'اسم المنتج', qty: 'الكمية', name: 'اسمك الكريم', phone: 'رقم الجوال', address: 'العنوان',
 };
+const ORDER_STATUS_REPLIES = {
+  'جديد': 'طلبك في انتظار التأكيد البنكي أو عند الاستلام — سنبدأ التحضير فوراً 🛍️',
+  'قيد التحضير': 'جارٍ تجهيز طلبك داخل مخزون المتجر 🔧',
+  'تم الإرسال': 'خرج طلبك للتوصيل وسيتواصل معك الشاحن قريباً 📦',
+  'تم الشحن': 'الشاحن في الطريق إليك الآن 🚚',
+  'مكتمل': 'تم استلام طلبك وتوصيله بنجاح ✅ شكراً لثقتك — نتمنى أن تنال إعجابك.',
+  'ملغي': 'تم إلغاء طلبك — يمكنك إعادة الطلب متى شئت 😊',
+};
+function handleOrderStatus(conv, text) {
+  const m = stripTashkeel(text);
+  if (!/(حاله|الحالة|حالة|وين|متى|تقدم|استلام|شحن|tracking)/.test(m)) return null;
+  let phone = String(conv?.psid || '').replace(/\D/g, '');
+  if (phone.startsWith('0') && phone.length === 10) phone = '218' + phone.slice(1);
+  else if (phone.startsWith('00218')) phone = '218' + phone.slice(4);
+  const cust = phone ? get('SELECT * FROM customers WHERE phone LIKE ? ORDER BY id DESC LIMIT 1', `%${phone}%`) : null;
+  const cid = cust?.id || 0;
+  const orders = cid
+    ? all('SELECT * FROM orders WHERE customer_id=? ORDER BY id DESC LIMIT 3', cid)
+    : (phone ? all('SELECT * FROM orders WHERE phone LIKE ? ORDER BY id DESC LIMIT 3', `%${phone}%`) : all('SELECT * FROM orders ORDER BY id DESC LIMIT 3'));
+  if (!orders.length) return 'عذراً، ما لقيت لك أي طلب مسجّل 😔 — إذا أردت اطلب منتجك من خلال المتجر أو من واتساب التواصل مباشرة.';
+  const o = orders[0];
+  const items = JSON.parse(o.items_json || '[]');
+  const last = items[items.length - 1];
+  let out = `📦 طلبك رقم #${o.id}\nالحالة: ${o.status}\n${last ? `${last.name} ×${last.qty}` : ''}`.trim();
+  if (ORDER_STATUS_REPLIES[o.status]) out += `\n${ORDER_STATUS_REPLIES[o.status]}`;
+  out += '\nللمتابعة أو أي استفسار أكمل معاك — رقم الطلب: #' + o.id;
+  return out;
+}
 function orderQuestion(next) {
   const n = ORDER_FIELDS.indexOf(next) + 1;
   const tips = {
@@ -77,6 +105,13 @@ function handleOrderDraft(conv, text) {
   const step = draft.step;
   const value = String(text).trim().slice(0, 200);
   if (step === 'qty' && (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 99)) return 'الكمية لازم تكون رقم بين ١ و٩٩ 🙏';
+  if (step === 'qty') {
+    const prods = all('SELECT id, name_ar, price, stock FROM products WHERE active=1');
+    const wds = stripTashkeel(data.product).split(/\s+/).filter(w => w.length >= 3);
+    const scored = prods.map(x => ({ x, sc: wds.reduce((s, w) => s + (stripTashkeel(x.name_ar).includes(w) ? w.length : 0), 0) })).sort((a, b) => b.sc - a.sc);
+    const prod = scored[0]?.sc ? scored[0].x : null;
+    if (prod && prod.stock > 0 && Number(value) > prod.stock) return `الكمية المطلوبة أكبر من المخزون المتوفر (المتوفر: ${prod.stock}) 😔 جرّب بكرة أو اختر منتجاً آخر.`;
+  }
   if (step === 'phone' && value.replace(/\D/g, '').length < 8) return 'رقم الجوال غير صالح — اكتبه مع رمز الدولة 🙏';
   data[step] = value;
   const idx = ORDER_FIELDS.indexOf(step);
@@ -93,10 +128,10 @@ function handleOrderDraft(conv, text) {
   }).sort((a, b) => b.score - a.score);
   const p = scored[0]?.score ? scored[0].p : { id: 0, name_ar: data.product, price: 0 };
   const qty = Math.min(99, Math.max(1, Number(data.qty) || 1));
-  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id)
-    VALUES (?,?,?,?,?,?,?,?,?,?)`, data.name, data.phone, data.address, `طلب من ${conv.platform}`,
+  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, psid) VALUES (?,?,?,?,?,?,?,?,?,?,?)`, data.name, data.phone, data.address, `طلب من ${conv.platform}`,
     JSON.stringify([{ id: p.id, name: p.name_ar, price: p.price, qty, options: '' }]),
-    p.price * qty, 'جديد', conv.platform === 'whatsapp' ? 'واتساب' : 'مسنجر', now(), 0);
+    p.price * qty, 'جديد', conv.platform === 'whatsapp' ? 'واتساب' : 'مسنجر', now(), 0, String(conv.psid || conv.id));
+  if (p.id) run('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?', qty, p.id);
   run('DELETE FROM order_drafts WHERE conversation_id = ?', conv.id);
   const cur = getSettings().currency || '';
   return `تم استلام طلبك بنجاح 🎉\nرقم الطلب: #${Number(info.lastInsertRowid)}\n${p.name_ar} × ${qty} = ${Number(p.price * qty).toLocaleString('ar-SA')} ${cur}\nسيتم التواصل معك على ${data.phone} لتأكيد العنوان: ${data.address}\nشكراً لثقتك 🤍`;
@@ -118,7 +153,8 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
 
   const history = all('SELECT direction, text FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 8', conv.id).reverse();
   const flowReply = handleOrderDraft(conv, text);
-  const reply = flowReply || await generateReply(text, history.slice(0, -1), image);
+  const statusReplyText = handleOrderStatus(conv, text);
+  const reply = statusReplyText || flowReply || await generateReply(text, history.slice(0, -1), image);
   run('INSERT INTO messages (conversation_id, direction, text, external_id, created_at) VALUES (?,?,?,?,?)', conv.id, 'out', reply, '', now());
   run('UPDATE conversations SET updated_at = ? WHERE id = ?', now(), conv.id);
 

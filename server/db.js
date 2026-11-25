@@ -123,6 +123,7 @@ db.exec('CREATE TABLE IF NOT EXISTS webhook_events (id INTEGER PRIMARY KEY AUTOI
 db.exec("CREATE TABLE IF NOT EXISTS order_drafts (conversation_id INTEGER PRIMARY KEY, step TEXT NOT NULL, data_json TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL);");
 ensureColumn('orders', 'delivery_fee', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'delivery_method', "TEXT NOT NULL DEFAULT 'توصيل للمنزل'");
+ensureColumn('orders', 'psid', 'TEXT NOT NULL DEFAULT \'\'');
 ensureColumn('customers', 'email', 'TEXT');
 ensureColumn('customers', 'verified', 'INTEGER NOT NULL DEFAULT 0');
 db.exec('CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);');
@@ -162,6 +163,8 @@ const defaults = {
   delivery_free_threshold: '0',
   delivery_note: 'التوصيل خلال ٢٤–٧٢ ساعة داخل ليبيا',
   delivery_methods: 'توصيل للمنزل،استلام من المتجر',
+  business_hours: 'السبت – الخميس: ٩ ص – ٩ م',
+  return_policy: 'يمكن استبدال أو إرجاع المنتج خلال ١٤ يوماً من تاريخ الاستلام.',
   currency: 'د.ل',
   country: 'ليبيا',
   whatsapp_number: '218945343522',
