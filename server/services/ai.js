@@ -209,9 +209,7 @@ function localSmartReply(text, history = []) {
     return out;
   }
   if (close(m, ['سعر', 'اسعار', 'كم', 'price', 'بكم'])) {
-    const top = products.slice(0, 3);
-    if (top.length) return `${top.map(p => `${p.name_ar}: ${money(p.price)}`).join('\n')}\nأي واحد تفضل؟ أقدر أخصّصه لك فوراً 🤍`;
-    return 'الكتالوج فارغ حالياً — أضف منتجات من لوحة الأدمن.';
+    return 'أي منتج تود معرفة سعره؟ اختر من الخيارات أدناه وسأعطيك السعر والتفاصيل كاملة 🤍';
   }
   if (close(m, ['طلب', 'اطلب', 'شراء', 'order'])) return 'تمام، خلينا نجهّز طلبك 🛒 اكتب «أريد الطلب» وسأسألك خطوة بخطوة (المنتج، الكمية، اسمك، الجوال، العنوان).';
   if (close(m, ['منتجات', 'كتالوج', 'catalog', 'اصناف'])) {
@@ -224,4 +222,4 @@ function localSmartReply(text, history = []) {
   return `وصلني سؤالك 🤍 أقدر أساعدك بالمنتجات والأسعار وتجهيز الطلب — اختر من الأزرار بالأسفل.`;
 }
 
-module.exports = { askAI, askImage, ruleReply, localSmartReply, stripTashkeel };
+module.exports = { askAI, askImage, ruleReply, localSmartReply, stripTashkeel, close };

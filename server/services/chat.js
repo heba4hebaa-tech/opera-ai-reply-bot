@@ -1,6 +1,6 @@
 'use strict';
 const { all, get, run, now, getSettings } = require('../db');
-const { askAI, askImage, ruleReply, localSmartReply, stripTashkeel } = require('./ai');
+const { askAI, askImage, ruleReply, localSmartReply, stripTashkeel, close } = require('./ai');
 const { catalogText, priceListText } = require('./catalog');
 const platforms = require('./platforms');
 
@@ -20,6 +20,14 @@ function exactCommand(text) {
 
 async function generateReply(text, history, image) {
   const s = getSettings();
+  const mm = stripTashkeel(text);
+  if (close(mm, ['سعر', 'اسعار', 'كم', 'price', 'بكم'])) {
+    const named = all('SELECT name_ar FROM products WHERE active=1').some(p => {
+      const w = stripTashkeel(p.name_ar).split(/\s+/).filter(x => x.length >= 4);
+      return w.some(x => mm.includes(x));
+    });
+    if (!named) return 'أي منتج تود معرفة سعره؟ اختر من الخيارات أدناه وسأعطيك السعر والتفاصيل كاملة 🤍';
+  }
   // الذكاء الاصطناعي هو المتحدث الأساسي دائماً — الردود المحفوظة للطوارئ فقط
   if (String(s.ai_enabled) === '1') {
     if (image?.base64) {
@@ -119,7 +127,12 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
     sent = await platforms.send(platform, psid, reply);
     const outCount = all('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'out').n;
     if (outCount === 1 || outCount % 3 === 0) {
-      await platforms.sendOptions(platform, psid, 'اختر ما تريد:', ['عرض المنتجات', 'أريد الطلب', 'مساعدة']);
+      let buttons = ['عرض المنتجات', 'أريد الطلب', 'مساعدة'];
+      if (close(stripTashkeel(text), ['سعر', 'اسعار', 'كم', 'price', 'بكم'])) {
+        const names = all('SELECT name_ar FROM products WHERE active=1 ORDER BY id DESC LIMIT 3').map(x => x.name_ar);
+        if (names.length) buttons = names;
+      }
+      await platforms.sendOptions(platform, psid, 'اختر من الخيارات:', buttons);
     }
   }
   // ترحيب عند أول لقاء (مرة واحدة لكل محادثة)
