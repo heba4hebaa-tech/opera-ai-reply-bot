@@ -11,7 +11,7 @@ const base = process.env.BASE || 'https://opera-ai-reply-bot.onrender.com';
   const cookie = (login.headers.get('set-cookie') || '').split(';')[0];
   if (!cookie) { console.log('لا يمكن تسجيل الدخول كأدمن'); process.exit(1); }
   const payload = {
-    currency: 'د.ل', country: 'ليبيا', business_name: 'LUNZERA', logo_url: '/logo.svg',
+    currency: 'د.ل', country: 'ليبيا', business_name: 'LUNZERA', logo_url: '/logo.svg', invoice_size: '80mm',
     delivery_fee: '0', delivery_free_threshold: '0', delivery_note: 'التوصيل خلال ٢٤–٧٢ ساعة داخل ليبيا',
     delivery_methods: 'توصيل للمنزل،استلام من المتجر',
     whatsapp_number: '218945343522',

@@ -157,6 +157,7 @@ function now() { return new Date().toISOString(); }
 const defaults = {
   business_name: 'LUNZERA',
   logo_url: '/logo.svg',
+  invoice_size: '80mm',
   delivery_fee: '0',
   delivery_free_threshold: '0',
   delivery_note: 'التوصيل خلال ٢٤–٧٢ ساعة داخل ليبيا',

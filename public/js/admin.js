@@ -354,7 +354,7 @@
   }
 
   $('saveSettings').onclick = async () => {
-    const keys = ['business_name', 'currency', 'country', 'logo_url', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+    const keys = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
     const payload = {};
     for (const k of keys) {
       const el = $('set_' + k);
@@ -371,6 +371,25 @@
     if (r.ok) out.textContent = `✅ ${r.displayPhone || r.phoneId} ${r.verifiedName ? '· ' + r.verifiedName : ''}`;
     else out.textContent = '❌ ' + (r.error || 'تعذر التحقق');
   };
+
+  (() => {
+    const input = $('logoFile');
+    if (!input) return;
+    const show = url => {
+      if (!url) return;
+      $('set_logo_url').value = url;
+      $('logoPreview').innerHTML = `<img src="${url}" style="max-height:60px;border-radius:8px;">`;
+      $('logoCurrent').src = url;
+    };
+    show($('set_logo_url').value);
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+      toast('جارٍ رفع اللوجو...');
+      try { show(await uploadFile(file)); toast('تم رفع اللوجو ✓ — اضغط حفظ الإعدادات'); }
+      catch (e) { toast(e.message, true); }
+    };
+  })();
 
   $('testFacebook').onclick = async () => {
     const out = $('fbTestResult');
