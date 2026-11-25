@@ -1,15 +1,25 @@
 'use strict';
 const config = require('../config');
+const { getSettings } = require('../db');
+
+function credentials() {
+  const s = getSettings();
+  return {
+    token: s.wa_access_token || config.WA_ACCESS_TOKEN,
+    phoneId: s.wa_phone_number_id || config.WA_PHONE_NUMBER_ID,
+  };
+}
 
 async function sendWhatsApp(to, text) {
-  if (!config.WA_ACCESS_TOKEN || !config.WA_PHONE_NUMBER_ID) {
-    return { ok: false, skipped: true, error: 'واتساب غير مُعدّ (WA_ACCESS_TOKEN / WA_PHONE_NUMBER_ID)' };
+  const { token, phoneId } = credentials();
+  if (!token || !phoneId) {
+    return { ok: false, skipped: true, error: 'واتساب غير مُعدّ — أضف Phone Number ID والتوكن من الإعدادات' };
   }
   try {
-    const url = `https://graph.facebook.com/${config.GRAPH_API_VERSION}/${config.WA_PHONE_NUMBER_ID}/messages`;
+    const url = `https://graph.facebook.com/${config.GRAPH_API_VERSION}/${phoneId}/messages`;
     const res = await fetch(url, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${config.WA_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
         to,
@@ -64,4 +74,4 @@ async function send(platform, psid, text) {
   return { ok: false, error: 'منصة غير معروفة' };
 }
 
-module.exports = { sendWhatsApp, sendMessenger, send };
+module.exports = { sendWhatsApp, sendMessenger, send, credentials };

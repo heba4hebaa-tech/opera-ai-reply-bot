@@ -119,7 +119,11 @@
           <div class="card">
             <h3 class="card-title">🏪 بيانات المتجر</h3>
             <div class="form-row"><label>اسم المتجر</label><input id="set_business_name"></div>
-            <div class="form-row two"><div><label>العملة</label><input id="set_currency"></div><div><label>رقم واتساب (مع الدولة)</label><input id="set_whatsapp_number" placeholder="9665xxxxxxxx"></div></div>
+            <div class="form-row two"><div><label>العملة</label><input id="set_currency"></div><div><label>رقم واتساب للعرض (زر المحادثة)</label><input id="set_whatsapp_number" placeholder="9665xxxxxxxx"></div></div>
+            <div class="form-row"><label>واتساب Phone Number ID (من Meta)</label><input id="set_wa_phone_number_id" placeholder="رقم من Meta Developers"></div>
+            <div class="form-row"><label>واتساب Access Token</label><input id="set_wa_access_token" type="password" placeholder="اتركه فارغاً لاستخدام التوكن في .env"></div>
+            <div class="row"><button class="btn btn-ghost btn-sm" id="testWhatsapp">🔍 تحقق من رقم النشاط</button><span id="waTestResult" class="small muted"></span></div>
+            <p class="small muted">تقدر تغيّر رقم النشاط هنا في أي وقت — يُستخدم فوراً لإرسال ردود واتساب بدون إعادة تشغيل.</p>
             <div class="form-row"><label>رابط الكتالوج (اختياري)</label><input id="set_catalog_url" placeholder="https://..."></div>
             <div class="form-row"><label>رابط صفحة مسنجر (اختياري)</label><input id="set_messenger_link" placeholder="https://m.me/..."></div>
             <div class="form-row"><label>رسالة الذيل في المتجر</label><input id="set_footer_text"></div>

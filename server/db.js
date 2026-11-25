@@ -90,6 +90,8 @@ const defaults = {
   business_name: 'متجر أوبيرا',
   currency: 'ر.س',
   whatsapp_number: '',
+  wa_phone_number_id: '',
+  wa_access_token: '',
   messenger_link: '',
   catalog_url: '',
   ai_enabled: '1',

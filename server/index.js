@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const config = require('./config');
 const { all, get, run, now, getSettings, setSetting, hashPassword, verifyPassword } = require('./db');
 const { handleIncoming, generateReply } = require('./services/chat');
+const { credentials: waCredentials } = require('./services/platforms');
 
 // ------------------------- helpers -------------------------
 const str = v => String(v ?? '').trim();
@@ -178,7 +179,8 @@ add('GET', '/api/admin/dashboard', () => {
       (SELECT text FROM messages m WHERE m.conversation_id=c.id ORDER BY m.id DESC LIMIT 1) AS last_message
       FROM conversations c ORDER BY c.updated_at DESC LIMIT 6`),
     config: {
-      gemini: !!config.GEMINI_API_KEY, whatsapp: !!config.WA_ACCESS_TOKEN,
+      gemini: !!config.GEMINI_API_KEY,
+      whatsapp: !!(s.wa_phone_number_id || config.WA_PHONE_NUMBER_ID) && !!(s.wa_access_token || config.WA_ACCESS_TOKEN),
       messenger: !!config.MESSENGER_PAGE_TOKEN, webhookSecret: !!config.META_APP_SECRET,
     },
     businessName: s.business_name,
@@ -271,11 +273,12 @@ add('DELETE', '/api/admin/faqs/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
-const SETTING_KEYS = ['business_name', 'currency', 'whatsapp_number', 'messenger_link', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+const SETTING_KEYS = ['business_name', 'currency', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
 add('GET', '/api/admin/settings', () => {
   const s = getSettings();
   const out = {}; SETTING_KEYS.forEach(k => out[k] = s[k] ?? '');
-  return { settings: out, runtime: { gemini: !!config.GEMINI_API_KEY, model: config.GEMINI_MODEL, whatsapp: !!config.WA_ACCESS_TOKEN, messenger: !!config.MESSENGER_PAGE_TOKEN } };
+  const wa = waCredentials();
+  return { settings: out, runtime: { gemini: !!config.GEMINI_API_KEY, model: config.GEMINI_MODEL, whatsapp: !!(wa.token && wa.phoneId), whatsappFromSettings: !!s.wa_phone_number_id, messenger: !!config.MESSENGER_PAGE_TOKEN } };
 }, { auth: true });
 add('PUT', '/api/admin/settings', ({ body }) => {
   for (const k of SETTING_KEYS) if (Object.prototype.hasOwnProperty.call(body, k)) setSetting(k, body[k]);
@@ -298,6 +301,20 @@ add('POST', '/api/admin/test-reply', async ({ body }) => {
   if (!message) return { status: 400, body: { error: 'اكتب رسالة للاختبار' } };
   const reply = await generateReply(message, []);
   return { ok: true, reply };
+}, { auth: true });
+
+add('POST', '/api/admin/test-whatsapp', async () => {
+  const { token, phoneId } = waCredentials();
+  if (!token || !phoneId) return { status: 400, body: { error: 'أضف Phone Number ID والتوكن أولاً' } };
+  try {
+    const url = `https://graph.facebook.com/${config.GRAPH_API_VERSION}/${encodeURIComponent(phoneId)}?fields=verified_name,display_phone_number&access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const data = await res.json();
+    if (!res.ok) return { status: 400, body: { error: data?.error?.message || `HTTP ${res.status}` } };
+    return { ok: true, verifiedName: data.verified_name || '', displayPhone: data.display_phone_number || '', phoneId };
+  } catch (e) {
+    return { status: 400, body: { error: e.message } };
+  }
 }, { auth: true });
 
 const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs'];

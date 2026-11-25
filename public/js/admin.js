@@ -234,7 +234,7 @@
   }
 
   $('saveSettings').onclick = async () => {
-    const keys = ['business_name', 'currency', 'whatsapp_number', 'messenger_link', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+    const keys = ['business_name', 'currency', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
     const payload = {};
     for (const k of keys) {
       const el = $('set_' + k);
@@ -242,6 +242,14 @@
     }
     const r = await api('/api/admin/settings', { method: 'PUT', body: payload });
     if (r.ok) { toast('تم حفظ الإعدادات ✓'); loadOverview(); } else toast(r.error || 'تعذر الحفظ', true);
+  };
+
+  $('testWhatsapp').onclick = async () => {
+    const out = $('waTestResult');
+    out.textContent = 'جارٍ التحقق...';
+    const r = await api('/api/admin/test-whatsapp', { method: 'POST', body: {} });
+    if (r.ok) out.textContent = `✅ ${r.displayPhone || r.phoneId} ${r.verifiedName ? '· ' + r.verifiedName : ''}`;
+    else out.textContent = '❌ ' + (r.error || 'تعذر التحقق');
   };
 
   $('backupBtn').onclick = async () => {
