@@ -50,6 +50,12 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
 
   let sent = { ok: true, skipped: !sendReply };
   if (sendReply) sent = await platforms.send(platform, psid, reply);
+  // ترحيب عند أول لقاء (مرة واحدة لكل محادثة)
+  if (all('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'out').n === 1) {
+    const settings = getSettings();
+    const welcome = String(settings.greeting || '').replace('{business}', settings.business_name || 'متجرنا');
+    if (welcome) await platforms.send(platform, psid, welcome);
+  }
   return { reply, sent, conversationId: conv.id };
 }
 

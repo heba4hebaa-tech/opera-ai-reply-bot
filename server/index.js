@@ -7,6 +7,7 @@ const config = require('./config');
 const { all, get, run, now, getSettings, setSetting, hashPassword, verifyPassword } = require('./db');
 const { handleIncoming, generateReply } = require('./services/chat');
 const { credentials: waCredentials } = require('./services/platforms');
+const { creds: fbCreds, sendPagePost, replyPost, replyComment, graph: fbGraph } = require('./services/facebook');
 
 // ------------------------- helpers -------------------------
 const str = v => String(v ?? '').trim();
@@ -269,7 +270,8 @@ add('GET', '/api/admin/dashboard', () => {
     config: {
       gemini: !!config.GEMINI_API_KEY,
       whatsapp: !!(s.wa_phone_number_id || config.WA_PHONE_NUMBER_ID) && !!(s.wa_access_token || config.WA_ACCESS_TOKEN),
-      messenger: !!(s.messenger_page_token || config.MESSENGER_PAGE_TOKEN), webhookSecret: !!config.META_APP_SECRET,
+      messenger: !!(s.messenger_page_token || config.MESSENGER_PAGE_TOKEN),
+      facebook: !!(s.facebook_page_id || config.FACEBOOK_PAGE_ID), webhookSecret: !!config.META_APP_SECRET,
     },
     businessName: s.business_name,
   };
@@ -330,7 +332,7 @@ add('GET', '/api/admin/orders', ({ query }) => {
   return { items: rows.map(o => ({ ...o, items: JSON.parse(o.items_json || '[]') })) };
 }, { auth: true });
 add('PUT', '/api/admin/orders/:id', ({ params, body }) => {
-  const allowed = ['جديد', 'قيد التحضير', 'تم الشحن', 'مكتمل', 'ملغي'];
+  const allowed = ['جديد', 'قيد التحضير', 'تم الإرسال', 'تم الشحن', 'مكتمل', 'ملغي'];
   const status = str(body.status);
   if (!allowed.includes(status)) return { status: 400, body: { error: 'حالة غير صالحة' } };
   run('UPDATE orders SET status=? WHERE id=?', status, num(params.id));
@@ -430,6 +432,41 @@ add('POST', '/api/admin/test-messenger', async () => {
   } catch (e) { return { status: 400, body: { error: e.message } }; }
 }, { auth: true });
 
+add('POST', '/api/admin/test-facebook', async () => {
+  try {
+    const { pageId } = fbCreds();
+    if (!pageId) return { status: 400, body: { error: 'أضف ID الصفحة' } };
+    const data = await fbGraph(pageId, { fields: 'id,name,is_webhooks_subscribed', access_token: fbCreds().token }, 'GET', fbCreds().token);
+    return { ok: true, pageId, name: data.name || '' };
+  } catch (e) {
+    return { status: 400, body: { error: e.message } };
+  }
+}, { auth: true });
+
+add('POST', '/api/admin/page/post', async ({ body }) => {
+  const message = str(body.message);
+  if (!message.trim()) return { status: 400, body: { error: 'اكتب محتوى للنشر' } };
+  try {
+    const post = await sendPagePost(message.trim().slice(0, 6000));
+    return { ok: true, id: post.id };
+  } catch (e) {
+    return { status: 400, body: { error: e.message } };
+  }
+}, { auth: true });
+
+add('POST', '/api/admin/orders/:id/notify', async ({ params, body }) => {
+  const o = get('SELECT * FROM orders WHERE id=?', num(params.id));
+  if (!o) return { status: 404, body: { error: 'طلب غير موجود' } };
+  if (o.notified_messenger || o.notified_whatsapp) return { ok: true, skipped: true };
+  const platform = body.platform || 'messenger';
+  const to = o.customer_name;
+  const msg = `⚠️ للمعلومة: طلبك #${o.id} جديد/تحضير: ${o.status}\n${o.notes ? 'ملاحظات الزبون: ' + o.notes : ''}`;
+  const { platforms } = { platforms: require('./services/platforms') };
+  const r = platform === 'whatsapp' ? await platforms.sendWhatsApp(o.phone, msg) : await platforms.sendMessenger(o.psid || o.phone, msg);
+  if (r.ok) run(`UPDATE orders SET ${platform === 'whatsapp' ? 'notified_whatsapp' : 'notified_messenger'}=1 WHERE id=?`, o.id);
+  return { ok: !!r.ok, sent: r.ok === true, skipped: !!r.skipped, error: r.error };
+}, { auth: true });
+
 const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes'];
 add('GET', '/api/admin/backup', () => {
   const out = { version: 1, exported_at: now() };
@@ -494,6 +531,52 @@ add('POST', '/webhooks/whatsapp', ({ req, raw, body, res }) => {
 });
 
 add('GET', '/webhooks/messenger', webhookVerify);
+add('GET', '/webhooks/facebook', webhookVerify);
+add('POST', '/webhooks/facebook', async ({ req, raw, body, res }) => {
+  if (!verifyWebhookSignature(req, raw)) return text(res, 401, 'Invalid signature');
+  const jobs = [];
+  for (const entry of body.entry || []) {
+    for (const change of entry.changes || []) {
+      const v = change.value || {};
+      const msg = v.message;
+      const pageId = fbCreds().pageId;
+      if (msg?.text && v.from && v.from.id && v.from.id !== pageId) {
+        let conv = get('SELECT * FROM conversations WHERE platform = ? AND psid = ?', 'facebook', v.from.id);
+        if (!conv) {
+          run('INSERT INTO conversations (platform, psid, name, created_at, updated_at) VALUES (?,?,?,?,?)', 'facebook', v.from.id, v.from.name || '', now(), now());
+          conv = get('SELECT * FROM conversations WHERE platform = ? AND psid = ?', 'facebook', v.from.id);
+        }
+        const externalId = v.id || v.post_id || '';
+        const seen = externalId ? get('SELECT 1 FROM messages WHERE external_id = ? LIMIT 1', externalId) : null;
+        if (!seen) {
+          run('INSERT INTO messages (conversation_id, direction, text, external_id, created_at) VALUES (?,?,?,?,?)', conv.id, 'in', msg.text, externalId, now());
+          jobs.push((async () => {
+            const reply = await generateReply(msg.text, []);
+            try { await fbGraph(`${v.post_id}/comments`, { message: reply }); } catch (e) { console.error('[FB post comments]', e.message); }
+          })());
+        }
+      }
+      // ردود تلقائية على التعليقات (object comments)
+      for (const t of v.to?.data || []) {
+        if (msg?.text && t?.name === 'Comments') {
+          const commentId = v.id || t.id;
+          if (commentId && !get('SELECT 1 FROM messages WHERE external_id = ? LIMIT 1', `fbcomment:${commentId}`)) {
+            run('INSERT INTO messages (conversation_id, direction, text, external_id, created_at) VALUES (?,?,?,?,?)',
+              (get('SELECT id FROM conversations WHERE platform = ?', 'facebook') || { id: 0 }).id,
+              'in', msg.text, `fbcomment:${commentId}`, now());
+            jobs.push((async () => {
+              const reply = await generateReply(msg.text, []);
+              try { await replyComment(commentId, reply); } catch (e) { console.error('[FB comment]', e.message); }
+            })());
+          }
+        }
+      }
+    }
+  }
+  Promise.allSettled(jobs).then(rs => rs.forEach(r => r.status === 'rejected' && console.error('[FB webhook]', r.reason)));
+  return text(res, 200, 'OK');
+});
+
 add('POST', '/webhooks/messenger', ({ req, raw, body, res }) => {
   if (!verifyWebhookSignature(req, raw)) return text(res, 401, 'Invalid signature');
   const jobs = [];

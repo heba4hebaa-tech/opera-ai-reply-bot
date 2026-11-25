@@ -73,7 +73,7 @@
       <!-- orders -->
       <section class="section" id="sec-orders">
         <div class="section-head"><div><h2>الطلبات</h2><p class="muted small">تابع طلبات الزبائن وحدّث حالتها</p></div>
-          <select id="orderFilter" style="width:auto;"><option value="">كل الحالات</option><option>جديد</option><option>قيد التحضير</option><option>تم الشحن</option><option>مكتمل</option><option>ملغي</option></select>
+          <select id="orderFilter" style="width:auto;"><option value="">كل الحالات</option><option>جديد</option><option>قيد التحضير</option><option>تم الإرسال</option><option>تم الشحن</option><option>مكتمل</option><option>ملغي</option></select>
         </div>
         <div class="card"><div class="table-wrap"><table><thead><tr><th>#</th><th>الزبون</th><th>الجوال</th><th>المحتوى</th><th>الإجمالي</th><th>المصدر</th><th>الحالة</th><th></th></tr></thead><tbody id="orderRows"></tbody></table></div></div>
       </section>
@@ -154,6 +154,13 @@
           <div><label>معرف الصفحة (لرابط m.me)</label><input id="set_messenger_page_id" placeholder="رقم صفحة فيسبوك"></div></div>
           <div class="row"><button class="btn btn-ghost btn-sm" id="testMessenger">🔍 تحقق من توكن مسنجر</button><span id="msTestResult" class="small muted"></span></div>
           <p class="small muted">لتغيير الصفحة: أنشئ Page Token للصفحة الجديدة في Meta Developers، الصقه هنا واضغط حفظ — الردود تتحول فوراً. Webhook يجب أن يكون مشتركاً لتلك الصفحة.</p>
+        </div>
+        <div class="card" style="margin-top:18px;">
+          <h3 class="card-title">🔗 صفحة فيسبوك (نشر تلقائي + تعليقات)</h3>
+          <div class="form-row two"><div><label>ID الصفحة</label><input id="set_facebook_page_id" placeholder="مثلاً: 10150167402339096"></div>
+          <div><label>Page Access Token</label><input id="set_facebook_page_token" type="password" placeholder="اتركه فارغاً لاستخدام التوكن في .env"></div></div>
+          <div class="row"><button class="btn btn-ghost btn-sm" id="testFacebook">🔍 تحقق من صفحة فيسبوك</button><button class="btn btn-primary btn-sm" id="postToPage" style="margin-left:8px;">📢 نشر بصفحة فيسبوك</button><span id="fbTestResult" class="small muted"></span></div>
+          <textarea id="fbPostText" style="min-height:90px;margin-top:8px;" placeholder="منتج جديد: قميص تجريبي ٧٩ د.ل في المتجر محتوى ذكي للجميع 🎁 https://..."></textarea>
         </div>
         <div class="card" style="margin-top:18px;">
           <h3 class="card-title">💾 النسخة الاحتياطية</h3>

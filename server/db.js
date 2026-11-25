@@ -117,6 +117,8 @@ ensureColumn('categories', 'sizes_json', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('orders', 'customer_id', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('orders', 'latitude', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'longitude', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('orders', 'notified_messenger', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('orders', 'notified_whatsapp', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('otp_codes', 'created_at', "TEXT NOT NULL DEFAULT ''");
 
 function now() { return new Date().toISOString(); }
@@ -131,6 +133,8 @@ const defaults = {
   messenger_link: '',
   messenger_page_token: '',
   messenger_page_id: '',
+  facebook_page_id: '',
+  facebook_page_token: '',
   catalog_url: '',
   ai_enabled: '1',
   ai_model: config.GEMINI_MODEL,

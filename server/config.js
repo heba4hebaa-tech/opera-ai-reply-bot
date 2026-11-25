@@ -36,6 +36,8 @@ module.exports = {
   WA_PHONE_NUMBER_ID: env.WA_PHONE_NUMBER_ID || '',
   WA_ACCESS_TOKEN: env.WA_ACCESS_TOKEN || '',
   MESSENGER_PAGE_TOKEN: env.MESSENGER_PAGE_TOKEN || '',
+  FACEBOOK_PAGE_ID: env.FACEBOOK_PAGE_ID || '',
+  FACEBOOK_PAGE_TOKEN: env.FACEBOOK_PAGE_TOKEN || '',
   GEMINI_API_KEY: env.GEMINI_API_KEY || '',
   GEMINI_MODEL: env.GEMINI_MODEL || 'gemini-2.5-flash',
   DB_PATH: path.join(ROOT, 'data', 'app.db'),

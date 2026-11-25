@@ -41,7 +41,8 @@ async function sendWhatsApp(to, text) {
 }
 
 async function sendMessenger(psid, text) {
-  const token = getSettings().messenger_page_token || config.MESSENGER_PAGE_TOKEN;
+  const s = getSettings();
+  const token = s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token;
   if (!token) {
     return { ok: false, skipped: true, error: 'المسنجر غير مُعدّ — أضف Page Token من الإعدادات' };
   }

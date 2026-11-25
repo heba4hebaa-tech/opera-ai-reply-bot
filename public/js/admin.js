@@ -252,7 +252,7 @@
   async function loadOrders() {
     const status = $('orderFilter').value;
     const d = await api('/api/admin/orders' + (status ? '?status=' + encodeURIComponent(status) : ''));
-    const statuses = ['جديد', 'قيد التحضير', 'تم الشحن', 'مكتمل', 'ملغي'];
+    const statuses = ['جديد', 'قيد التحضير', 'تم الإرسال', 'تم الشحن', 'مكتمل', 'ملغي'];
     $('orderRows').innerHTML = d.items.length ? d.items.map(o => `<tr>
       <td><b>#${o.id}</b><div class="small muted">${fmtDate(o.created_at)}</div></td>
       <td><b>${esc(o.customer_name)}</b><div class="small muted">${esc(o.address || '')}</div></td>
@@ -353,7 +353,7 @@
   }
 
   $('saveSettings').onclick = async () => {
-    const keys = ['business_name', 'currency', 'country', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+    const keys = ['business_name', 'currency', 'country', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
     const payload = {};
     for (const k of keys) {
       const el = $('set_' + k);
@@ -371,6 +371,19 @@
     else out.textContent = '❌ ' + (r.error || 'تعذر التحقق');
   };
 
+  $('testFacebook').onclick = async () => {
+    const out = $('fbTestResult');
+    out.textContent = 'جارٍ التحقق...';
+    const r = await api('/api/admin/test-facebook', { method: 'POST', body: {} });
+    out.textContent = r.ok ? `✅ صفحة ${r.pageId} · ${r.name}` : '❌ ' + (r.error || 'تعذر التحقق');
+  };
+  $('postToPage').onclick = async () => {
+    const msg = ($('fbPostText').value || '').trim();
+    if (!msg) { toast('اكتب أولاً المحتوى للنشر', true); return; }
+    const r = await api('/api/admin/page/post', { method: 'POST', body: { message: msg } });
+    toast(r.ok ? '✅ تم نشر المحتوى على الفيس ✅' : (r.error || 'فشل النشر'), !r.ok);
+    if (r.ok) $('fbPostText').value = '';
+  };
   $('testMessenger').onclick = async () => {
     const out = $('msTestResult');
     out.textContent = 'جارٍ التحقق...';
