@@ -7,7 +7,7 @@ function money(n) {
 }
 
 function productsForPrompt(limit = 40) {
-  return all(`SELECT p.id, p.name_ar, p.name_en, p.description, p.price, p.old_price, p.stock,
+  return all(`SELECT p.id, p.name_ar, p.name_en, p.description, p.price, p.old_price, p.stock, p.colors_json, p.sizes_json,
                      c.name_ar AS category
               FROM products p LEFT JOIN categories c ON c.id = p.category_id
               WHERE p.active = 1 ORDER BY p.id DESC LIMIT ?`, limit);
@@ -45,7 +45,11 @@ function buildKnowledge() {
   if (s.greeting) lines.push(`رسالة الترحيب التي يفضلها المتجر: ${s.greeting.replace('{business}', s.business_name || 'متجرنا')}`);
   lines.push('\nالأصناف: ' + (cats.map(c => c.name_ar).join('، ') || 'لا يوجد'));
   lines.push('\nالمنتجات والأسعار (استخدمها حرفياً ولا تخترع أسعاراً):');
-  lines.push(products.map(p => `- ${p.name_ar} | ${p.category || 'عام'} | ${money(p.price)}${p.old_price ? ` | قبل: ${money(p.old_price)}` : ''}${p.stock <= 0 ? ' | نفد المخزون' : ''} | ${p.description || ''}`).join('\n') || '- لا توجد منتجات');
+  const parse = v => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } };
+  lines.push(products.map(p => {
+    const colors = parse(p.colors_json), sizes = parse(p.sizes_json);
+    return `- ${p.name_ar} | ${p.category || 'عام'} | ${money(p.price)}${p.old_price ? ` | قبل: ${money(p.old_price)}` : ''}${p.stock <= 0 ? ' | نفد المخزون' : ''} | ${p.description || ''}${colors.length ? ` | الألوان: ${colors.join('، ')}` : ''}${sizes.length ? ` | المقاسات: ${sizes.join('، ')}` : ''}`;
+  }).join('\n') || '- لا توجد منتجات');
   lines.push('\nأسئلة شائعة وإجاباتها المعتمدة:');
   lines.push(faqs.map(f => `س: ${f.question}\nج: ${f.answer}`).join('\n') || '- لا توجد');
   return lines.join('\n');
