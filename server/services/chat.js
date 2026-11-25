@@ -153,7 +153,7 @@ function handleOrderDraft(conv, text) {
   }).sort((a, b) => b.score - a.score);
   const p = scored[0]?.score ? scored[0].p : { id: 0, name_ar: data.product, price: 0 };
   const qty = Math.min(99, Math.max(1, Number(data.qty) || 1));
-  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, psid, paid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, data.name, data.phone, data.address, `طلب من ${conv.platform}`,
+  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, psid, paid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, data.name, data.phone, data.address, `طلب من ${conv.platform}`,
     JSON.stringify([{ id: p.id, name: p.name_ar, price: p.price, qty, options: '', category: p.category_id }]),
     p.price * qty, 'جديد', conv.platform === 'whatsapp' ? 'واتساب' : 'مسنجر', now(), 0, String(conv.psid || conv.id), 0);
   if (p.id) run('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?', qty, p.id);
