@@ -244,6 +244,34 @@
     if (r.ok) { toast('تم حفظ الإعدادات ✓'); loadOverview(); } else toast(r.error || 'تعذر الحفظ', true);
   };
 
+  $('backupBtn').onclick = async () => {
+    const r = await fetch('/api/admin/backup', { credentials: 'same-origin' });
+    if (!r.ok) { toast('تعذر إنشاء النسخة', true); return; }
+    const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `opera-ai-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('تم تنزيل النسخة الاحتياطية ✓');
+  };
+  $('restoreBtn').onclick = () => $('restoreFile').click();
+  $('restoreFile').onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    let parsed;
+    try { parsed = JSON.parse(await file.text()); }
+    catch { toast('ملف JSON غير صالح', true); return; }
+    confirmBox('سيتم استبدال البيانات الحالية بالنسخة المستوردة. متابعة؟', async () => {
+      const r = await api('/api/admin/restore', { method: 'POST', body: { data: parsed } });
+      if (r.ok) {
+        toast('تم استيراد النسخة ✓');
+        await Promise.all([loadOverview(), loadCategories(), loadProducts(), loadOrders(), loadConversations(), loadFaqs()]);
+      } else toast(r.error || 'تعذر الاستيراد', true);
+    });
+    e.target.value = '';
+  };
+
   $('savePassword').onclick = async () => {
     const r = await api('/api/admin/password', { method: 'POST', body: {
       username: $('sec_username').value, old_password: $('sec_old').value, new_password: $('sec_new').value,

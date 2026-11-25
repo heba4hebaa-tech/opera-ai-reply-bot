@@ -300,6 +300,36 @@ add('POST', '/api/admin/test-reply', async ({ body }) => {
   return { ok: true, reply };
 }, { auth: true });
 
+const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs'];
+add('GET', '/api/admin/backup', () => {
+  const out = { version: 1, exported_at: now() };
+  for (const t of BACKUP_TABLES) out[t] = all(`SELECT * FROM ${t}`);
+  return out;
+}, { auth: true });
+add('POST', '/api/admin/restore', ({ body }) => {
+  const data = body.data || body;
+  if (!data || typeof data !== 'object') return { status: 400, body: { error: 'ملف النسخة غير صالح' } };
+  const { db } = require('./db');
+  try {
+    db.exec('BEGIN');
+    for (const t of [...BACKUP_TABLES].reverse()) run(`DELETE FROM ${t}`);
+    for (const t of BACKUP_TABLES) {
+      const rows = Array.isArray(data[t]) ? data[t] : [];
+      for (const row of rows) {
+        const cols = Object.keys(row).filter(k => !k.startsWith('_'));
+        if (!cols.length) continue;
+        run(`INSERT INTO ${t} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, ...cols.map(k => row[k]));
+      }
+    }
+    db.exec('COMMIT');
+    return { ok: true };
+  } catch (e) {
+    db.exec('ROLLBACK');
+    console.error('[Restore]', e);
+    return { status: 400, body: { error: 'تعذر استيراد النسخة' } };
+  }
+}, { auth: true });
+
 // ------------------------- webhooks -------------------------
 function webhookVerify({ query, res }) {
   const mode = str(query.get('hub.mode'));

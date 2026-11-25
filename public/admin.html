@@ -132,6 +132,15 @@
             <div class="small muted">مفتاح Gemini والمنصات تُضبط من ملف <code>.env</code>. الحالة الحالية: <span id="runtimeInfo"></span></div>
           </div>
         </div>
+        <div class="card" style="margin-top:18px;">
+          <h3 class="card-title">💾 النسخة الاحتياطية</h3>
+          <p class="small muted">نزّل نسخة من أصنافك ومنتجاتك وطلباتك ومحادثاتك قبل أي إعادة نشر، ثم استعدها متى احتجت.</p>
+          <div class="row wrap">
+            <button class="btn btn-ghost" id="backupBtn">⬇️ تنزيل نسخة</button>
+            <button class="btn btn-outline" id="restoreBtn">⬆️ استيراد نسخة</button>
+            <input type="file" id="restoreFile" accept="application/json,.json" class="hidden">
+          </div>
+        </div>
       </section>
 
       <!-- security -->
