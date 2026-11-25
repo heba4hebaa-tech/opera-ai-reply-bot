@@ -137,7 +137,7 @@ function ruleReply(message) {
     return top.length ? `الأسعار المتاحة: ${top.join(' · ')} 💫\nأي واحد تفضل؟` : 'الأسعار غير متاحة حالياً.';
   }
   if (/طلب|اطلب|اوصي|شراء|order/.test(m)) {
-    return `يسعدني مساعدتك في الطلب 🛒\nاكتب لي: اسم المنتج + الكمية + اسمك + رقم الجوال + العنوان.\nأو تصفّح المنتجات واطلب من المتجر مباشرة.${s.catalog_url ? `\n${s.catalog_url}` : ''}`;
+    return `تمام، خلينا نجهّز طلبك 🛒\nاختر المنتج من الأزرار بالأسفل أو اكتب اسمه، ثم أرسل الكمية واسمك ورقم جوالك — وأنا أتولّى الباقي.`;
   }
   if (/توصيل|شحن|دلفري|delivery|متى/.test(m)) {
     const faq = require('../db').all("SELECT answer FROM faqs WHERE active=1 AND (question LIKE '%توصيل%' OR question LIKE '%شحن%') LIMIT 1")[0];
