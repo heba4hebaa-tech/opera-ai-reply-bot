@@ -152,7 +152,7 @@ add('GET', '/api/store/info', () => {
     catalogUrl: s.catalog_url, logoUrl: s.logo_url,
     deliveryFee: num(s.delivery_fee), deliveryFreeThreshold: num(s.delivery_free_threshold),
     deliveryNote: s.delivery_note, deliveryMethods: String(s.delivery_methods || '').split('،').map(x => x.trim()).filter(Boolean),
-    businessHours: s.business_hours, returnPolicy: s.return_policy,
+    businessHours: s.business_hours, returnPolicy: s.return_policy, paymentMethods: s.payment_methods, bankInfo: s.bank_info,
   };
 });
 
@@ -439,7 +439,7 @@ add('DELETE', '/api/admin/faqs/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
-const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
 add('GET', '/api/admin/settings', () => {
   const s = getSettings();
   const out = {}; SETTING_KEYS.forEach(k => out[k] = s[k] ?? '');

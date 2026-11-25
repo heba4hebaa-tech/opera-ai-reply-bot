@@ -173,7 +173,9 @@ function ruleReply(message) {
   }
   if (/دفع|تحويل|كاش|payment/.test(m)) {
     const faq = require('../db').all("SELECT answer FROM faqs WHERE active=1 AND question LIKE '%دفع%' LIMIT 1")[0];
-    return faq ? faq.answer : 'يمكن الدفع عند الاستلام أو تحويل بنكي.';
+    const s = getSettings();
+    const parts = [faq ? faq.answer : 'يمكن الدفع عند الاستلام أو تحويل بنكي.', s.payment_methods ? `طرق الدفع المتاحة: ${s.payment_methods}` : '', s.bank_info ? `حسابنا البنكي للتسوية: ${s.bank_info}` : ''].filter(Boolean);
+    return parts.join('\n');
   }
   if (/ساعات|hours|مواعيد|التشغيل|الاغلاق/.test(m)) return `ساعات عمل ${getSettings().business_name || 'المتجر'}: ${getSettings().business_hours || 'السبت – الخميس: ٩ ص – ٩ م'} 🤍`;
   if (/ارجاع|استبدال|return|refund|استرداد/.test(m)) return getSettings().return_policy || 'يمكن استبدال أو إرجاع المنتج خلال ١٤ يوماً من تاريخ الاستلام.';

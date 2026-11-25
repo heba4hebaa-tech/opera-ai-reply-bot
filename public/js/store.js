@@ -314,8 +314,12 @@
       state.cart = []; saveCart(); closeCart(); m.close();
       const wa = String(state.info.whatsappNumber || '').replace(/\D/g, '');
       const waUrl = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(`مرحباً، أرسلت الطلب رقم ${r.orderId}`)}` : '';
+      const payLines = [];
+      if (state.info.paymentMethods) payLines.push(`💳 طرق الدفع: ${state.info.paymentMethods}`);
+      if (state.info.bankInfo) payLines.push(`🏦 الحساب البنكي: ${state.info.bankInfo}`);
       modal('تم استلام طلبك ✅', `<div class="center"><div style="font-size:44px;">🎉</div>
         <p>طلبك رقم <b>#${r.orderId}</b> وصلنا وسيتم التواصل معك قريباً.</p>
+        ${payLines.length ? `<div class="card" style="box-shadow:none;background:#f6f9fb;padding:12px;margin-top:10px;text-align:right;">${payLines.map(l => `<div>${l}</div>`).join('')}</div>` : ''}
         ${waUrl ? `<a class="btn btn-primary" href="${waUrl}" target="_blank" rel="noopener">📱 متابعة على واتساب</a>` : ''}</div>`);
     });
   }

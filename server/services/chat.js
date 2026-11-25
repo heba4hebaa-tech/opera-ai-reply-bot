@@ -134,7 +134,13 @@ function handleOrderDraft(conv, text) {
   if (p.id) run('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?', qty, p.id);
   run('DELETE FROM order_drafts WHERE conversation_id = ?', conv.id);
   const cur = getSettings().currency || '';
-  return `تم استلام طلبك بنجاح 🎉\nرقم الطلب: #${Number(info.lastInsertRowid)}\n${p.name_ar} × ${qty} = ${Number(p.price * qty).toLocaleString('ar-SA')} ${cur}\nسيتم التواصل معك على ${data.phone} لتأكيد العنوان: ${data.address}\nشكراً لثقتك 🤍`;
+  const pay = getSettings();
+  const payText = [
+    pay.payment_methods ? `💳 طرق الدفع: ${pay.payment_methods}` : '',
+    pay.bank_info ? `🏦 الحساب البنكي: ${pay.bank_info}` : '',
+    pay.delivery_note ? `🚚 ${pay.delivery_note}` : '',
+  ].filter(Boolean).join('\n');
+  return `تم استلام طلبك بنجاح 🎉\nرقم الطلب: #${Number(info.lastInsertRowid)}\n${p.name_ar} × ${qty} = ${Number(p.price * qty).toLocaleString('ar-SA')} ${cur}\nسيتم التواصل معك على ${data.phone} لتأكيد العنوان: ${data.address}\n${payText}\nشكراً لثقتك 🤍`;
 }
 
 async function handleIncoming({ platform, psid, name = '', text = '', externalId = '' , sendReply = true, image = null }) {

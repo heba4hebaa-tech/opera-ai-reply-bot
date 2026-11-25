@@ -44,6 +44,8 @@ function buildKnowledge() {
   if (s.business_hours) lines.push(`ساعات العمل: ${s.business_hours}`);
   if (s.return_policy) lines.push(`سياسة الإرجاع أو الاستبدال: ${s.return_policy}`);
   lines.push(`طريقة الرد المطلوبة: ${s.bot_tone || 'ودود ومختصر'}`);
+  if (s.payment_methods) lines.push(`طرق الدفع: ${s.payment_methods}`);
+  if (s.bank_info) lines.push(`بيانات الحساب البنكي: ${s.bank_info}`);
   if (s.greeting) lines.push(`رسالة الترحيب التي يفضلها المتجر: ${s.greeting.replace('{business}', s.business_name || 'متجرنا')}`);
   lines.push('\nالأصناف: ' + (cats.map(c => c.name_ar).join('، ') || 'لا يوجد'));
   lines.push('\nالمنتجات والأسعار (استخدمها حرفياً ولا تخترع أسعاراً):');
