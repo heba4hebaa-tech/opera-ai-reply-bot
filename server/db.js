@@ -121,9 +121,21 @@ ensureColumn('orders', 'notified_messenger', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('orders', 'notified_whatsapp', 'INTEGER NOT NULL DEFAULT 0');
 db.exec('CREATE TABLE IF NOT EXISTS webhook_events (id INTEGER PRIMARY KEY AUTOINCREMENT, platform TEXT, payload TEXT, created_at TEXT NOT NULL);');
 db.exec("CREATE TABLE IF NOT EXISTS order_drafts (conversation_id INTEGER PRIMARY KEY, step TEXT NOT NULL, data_json TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL);");
+db.exec(`CREATE TABLE IF NOT EXISTS reviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  order_id INTEGER DEFAULT 0,
+  customer_name TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  rating INTEGER NOT NULL DEFAULT 5,
+  text TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);');
 ensureColumn('orders', 'delivery_fee', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'delivery_method', "TEXT NOT NULL DEFAULT 'توصيل للمنزل'");
 ensureColumn('orders', 'psid', 'TEXT NOT NULL DEFAULT \'\'');
+ensureColumn('orders', 'paid', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('customers', 'email', 'TEXT');
 ensureColumn('customers', 'verified', 'INTEGER NOT NULL DEFAULT 0');
 db.exec('CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);');

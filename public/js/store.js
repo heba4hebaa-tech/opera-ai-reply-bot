@@ -78,6 +78,7 @@
         ${thumbs}
         <div class="product-info"><h3>${esc(p.name_ar)}</h3><p>${esc(p.description || 'بدون وصف')}</p>
           <div class="price">${money(p.price, cur)}${p.old_price ? `<s>${money(p.old_price, cur)}</s>` : ''}</div>
+          ${p.avg_rating ? `<div class="small" style="color:#e6a23c;">⭐ ${Number(p.avg_rating).toFixed(1)} · ${p.rating_count} تقييم</div>` : ''}
           <div class="product-foot"><span class="small muted">${out ? 'نفد المخزون' : `المتوفر: ${p.stock}`}</span>
             <button class="btn btn-primary btn-sm" data-add="${p.id}" ${out ? 'disabled' : ''}>＋ أضف</button></div>
         </div>${opts}

@@ -67,7 +67,13 @@
       ['💬', 'المحادثات', d.stats.conversations, d.stats.messages + ' رسالة'],
       ['👥', 'الزبائن', d.stats.customers ?? 0, 'مسجّلون برقم الجوال'],
     ];
-    $('statGrid').innerHTML = icons.map(i => `<div class="stat-card"><div class="ic">${i[0]}</div><div><div class="num">${i[2]}</div><div class="lbl">${i[1]}</div><div class="small muted">${i[3]}</div></div></div>`).join('');
+    const extra = [
+      ['💰', 'إجمالي المبيعات', money(d.stats.revenue, ''), 'طلبات مدفوعة: ' + (d.stats.paidOrders ?? 0)],
+      ['🚚', 'طلبات مسلّمة', String(d.stats.delivered ?? 0), ''],
+      ['🧾', 'متوسط قيمة الطلب', money(d.stats.avgOrder, ''), ''],
+    ];
+    $('statGrid').innerHTML = icons.map(i => `<div class="stat-card"><div class="ic">${i[0]}</div><div><div class="num">${i[2]}</div><div class="lbl">${i[1]}</div><div class="small muted">${i[3]}</div></div></div>`).join('')
+      + extra.map(i => `<div class="stat-card"><div class="ic">${i[0]}</div><div><div class="num">${i[2]}</div><div class="lbl">${i[1]}</div><div class="small muted">${i[3]}</div></div></div>`).join('');
     $('recentOrders').innerHTML = d.recentOrders.length ? d.recentOrders.map(o => `<div class="between" style="padding:8px 0;border-bottom:1px solid #f0f3f7;">
       <div><b class="small">#${o.id} · ${esc(o.customer_name)}</b><div class="small muted">${money(o.total, '')} · ${esc(o.source)}</div></div>
       <span class="pill ${statusClass(o.status)}">${esc(o.status)}</span></div>`).join('') : `<div class="empty small">لا توجد طلبات بعد</div>`;
@@ -142,6 +148,7 @@
       <td class="small">${esc(catName(p.category_id))}</td>
       <td><b style="color:var(--teal-dark);">${money(p.price, '')}</b>${p.old_price ? `<div class="small muted"><s>${money(p.old_price, '')}</s></div>` : ''}</td>
       <td>${p.stock}</td>
+      <td>${p.avg_rating ? `⭐ ${Number(p.avg_rating).toFixed(1)} (${p.rating_count} تقييم)` : '—'}</td>
       <td><span class="pill ${p.active ? 'ok' : 'bad'}">${p.active ? 'نشط' : 'مخفي'}</span></td>
       <td><button class="btn btn-ghost btn-sm" data-ep="${p.id}">تعديل</button> <button class="btn btn-danger btn-sm" data-dp="${p.id}">حذف</button></td>
     </tr>`).join('') : `<tr><td colspan="6" class="empty">لا توجد منتجات — أضف منتجاً جديداً</td></tr>`;
@@ -260,7 +267,7 @@
       <td class="small">${o.items.map(i => `${esc(i.name)} ×${i.qty}`).join('، ')}</td>
       <td><b style="color:var(--teal-dark);">${money(o.total, '')}</b></td>
       <td class="small muted">${esc(o.source)}</td>
-      <td><select data-os="${o.id}" style="width:auto;padding:5px 8px;">${statuses.map(s => `<option ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
+      <td><select data-os="${o.id}" style="width:auto;padding:5px 8px;">${statuses.map(s => `<option ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select> ${o.paid ? '<span class="pill ok">💳 مدفوع</span>' : ''}</td>
       <td><button class="btn btn-ghost btn-sm" data-inv="${o.id}">🖨️ فاتورة</button> <button class="icon-btn" data-od="${o.id}" title="حذف">🗑️</button></td>
     </tr>`).join('') : `<tr><td colspan="8" class="empty">لا توجد طلبات بعد</td></tr>`;
     $('orderRows').querySelectorAll('[data-os]').forEach(s => s.onchange = async () => {

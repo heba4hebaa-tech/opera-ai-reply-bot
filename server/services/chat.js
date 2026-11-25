@@ -75,6 +75,31 @@ function handleOrderStatus(conv, text) {
   out += '\nللمتابعة أو أي استفسار أكمل معاك — رقم الطلب: #' + o.id;
   return out;
 }
+function handleRating(conv, text) {
+  const m = stripTashkeel(text);
+  if (!/(قيم|تقييم|تقيّم|rating|نجم)/.test(m)) return null;
+  let phone = String(conv?.psid || '').replace(/\D/g, '');
+  if (phone.startsWith('0') && phone.length === 10) phone = '218' + phone.slice(1);
+  else if (phone.startsWith('00218')) phone = '218' + phone.slice(4);
+  const cust = phone ? get('SELECT * FROM customers WHERE phone LIKE ? ORDER BY id DESC LIMIT 1', `%${phone}%`) : null;
+  const cid = cust?.id || 0;
+  const orders = cid
+    ? all('SELECT * FROM orders WHERE customer_id=? ORDER BY id DESC LIMIT 3', cid)
+    : (phone ? all('SELECT * FROM orders WHERE phone LIKE ? ORDER BY id DESC LIMIT 3', `%${phone}%`) : all('SELECT * FROM orders ORDER BY id DESC LIMIT 3'));
+  if (!orders.length) return 'ما لقيت لك طلباً سابقاً 😔 — بعد استلام الطلب ولتقييم تجربتك هنا.';
+  const o = orders[0];
+  const existing = get('SELECT * FROM reviews WHERE order_id=? AND customer_name=? ORDER BY id DESC LIMIT 1', o.id, o.customer_name);
+  if (existing) return `شكراً لك 🤍 — تقييمك ${existing.rating}/٥ للطلب #${o.id} مسجّل ومُضاف للمنتج.`;
+  const items = JSON.parse(o.items_json || '[]');
+  const last = items[items.length - 1];
+  const numM = String(text).match(/[0-9\u0660-\u0669]/);
+  if (!numM) return `شكراً لك! 🌟 قيّل تجربتك — اكتب رقم تقييمك من ١ إلى ٥ (مثل: قيّم بـ ٥).`;
+  let num = parseInt(numM[0], 10);
+  if (numM[0].charCodeAt(0) > 57) num = String.fromCharCode(numM[0].charCodeAt(0) - 0x0660 + 0x30);
+  num = Math.max(1, Math.min(5, num));
+  run('INSERT INTO reviews (product_id, order_id, customer_name, phone, rating, text, created_at) VALUES (?,?,?,?,?,?,?)', Number(last?.id) || 0, o.id, o.customer_name, o.phone, num, String(text).slice(0, 300), now());
+  return `شكراً لأنك قيّمتنا! 🌟 تم تسجيل تقييمك ${num}/٥ للمنتج — نتمنى أن تنال إعجابك ونحن نجهّز لك كل ما يلزم.`;
+}
 function orderQuestion(next) {
   const n = ORDER_FIELDS.indexOf(next) + 1;
   const tips = {
@@ -128,9 +153,9 @@ function handleOrderDraft(conv, text) {
   }).sort((a, b) => b.score - a.score);
   const p = scored[0]?.score ? scored[0].p : { id: 0, name_ar: data.product, price: 0 };
   const qty = Math.min(99, Math.max(1, Number(data.qty) || 1));
-  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, psid) VALUES (?,?,?,?,?,?,?,?,?,?,?)`, data.name, data.phone, data.address, `طلب من ${conv.platform}`,
+  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, psid, paid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, data.name, data.phone, data.address, `طلب من ${conv.platform}`,
     JSON.stringify([{ id: p.id, name: p.name_ar, price: p.price, qty, options: '' }]),
-    p.price * qty, 'جديد', conv.platform === 'whatsapp' ? 'واتساب' : 'مسنجر', now(), 0, String(conv.psid || conv.id));
+    p.price * qty, 'جديد', conv.platform === 'whatsapp' ? 'واتساب' : 'مسنجر', now(), 0, String(conv.psid || conv.id), 0);
   if (p.id) run('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?', qty, p.id);
   run('DELETE FROM order_drafts WHERE conversation_id = ?', conv.id);
   const cur = getSettings().currency || '';
@@ -160,7 +185,8 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
   const history = all('SELECT direction, text FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 8', conv.id).reverse();
   const flowReply = handleOrderDraft(conv, text);
   const statusReplyText = handleOrderStatus(conv, text);
-  const reply = statusReplyText || flowReply || await generateReply(text, history.slice(0, -1), image);
+  const ratingReply = handleRating(conv, text);
+  const reply = statusReplyText || flowReply || ratingReply || await generateReply(text, history.slice(0, -1), image);
   run('INSERT INTO messages (conversation_id, direction, text, external_id, created_at) VALUES (?,?,?,?,?)', conv.id, 'out', reply, '', now());
   run('UPDATE conversations SET updated_at = ? WHERE id = ?', now(), conv.id);
 

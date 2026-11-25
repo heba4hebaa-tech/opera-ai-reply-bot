@@ -163,10 +163,10 @@ add('GET', '/api/store/categories', () => ({
 add('GET', '/api/store/products', ({ query }) => {
   const cat = Number(query.get('category') || 0);
   const q = str(query.get('q') || '');
-  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json';
+  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json, (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS rating_count';
   const rows = cat
-    ? all(`SELECT ${fields} FROM products WHERE active=1 AND category_id=? ORDER BY id DESC`, cat)
-    : all(`SELECT ${fields} FROM products WHERE active=1 ORDER BY id DESC`);
+    ? all(`SELECT ${fields} FROM products p WHERE active=1 AND category_id=? ORDER BY p.id DESC`, cat)
+    : all(`SELECT ${fields} FROM products p WHERE active=1 ORDER BY p.id DESC`);
   return { items: q ? rows.filter(p => (p.name_ar + p.name_en + p.description).toLowerCase().includes(q.toLowerCase())) : rows };
 });
 
@@ -187,10 +187,10 @@ add('POST', '/api/store/orders', ({ body, customer }) => {
   const method = str(body.delivery_method) || 'توصيل للمنزل';
   const fee = method === 'توصيل للمنزل' && subtotal < num(s2.delivery_free_threshold) ? num(s2.delivery_fee) : 0;
   const total = subtotal + fee;
-  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, latitude, longitude, delivery_fee, delivery_method) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, latitude, longitude, delivery_fee, delivery_method, paid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     name.slice(0, 120), phone.slice(0, 40), str(body.address).slice(0, 300), str(body.notes).slice(0, 500),
     JSON.stringify(clean), total, 'جديد', 'المتجر', now(), customer?.id || 0,
-    num(customer?.latitude || body.latitude), num(customer?.longitude || body.longitude), fee, method);
+    num(customer?.latitude || body.latitude), num(customer?.longitude || body.longitude), fee, method, 0);
   for (const i of clean) { if (i.id > 0) run('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?', i.qty, i.id); }
   return { ok: true, orderId: Number(info.lastInsertRowid), total };
 });
@@ -284,6 +284,18 @@ add('POST', '/api/admin/upload', ({ req, raw }) => {
 // ------------------------- admin API -------------------------
 add('GET', '/api/admin/dashboard', () => {
   const s = getSettings();
+  const allOrders = all('SELECT id, items_json, total, status, paid FROM orders ORDER BY id DESC LIMIT 200');
+  let revenue = 0, delivered = 0, paidOrders = 0; const topMap = {};
+  for (const o of allOrders) {
+    if (o.status && o.status !== 'ملغي') revenue += Number(o.total) || 0;
+    if (o.paid) paidOrders++;
+    if (['تم الشحن', 'مكتمل'].includes(o.status)) delivered++;
+    try { JSON.parse(o.items_json || '[]').forEach(i => { const k = String(i.name || ''); topMap[k] = (topMap[k] || 0) + (Number(i.qty) || 0); }); } catch {}
+  }
+  const topProducts = Object.entries(topMap).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, qty]) => ({ name, qty }));
+  const validOrders = allOrders.filter(o => o.status && o.status !== 'ملغي');
+  const avgOrder = validOrders.length ? Math.round((revenue / validOrders.length) * 100) / 100 : 0;
+  const ratings = all('SELECT product_id, AVG(rating) avg, COUNT(*) n FROM reviews GROUP BY product_id');
   return {
     stats: {
       orders: get('SELECT COUNT(*) n FROM orders').n,
@@ -293,6 +305,9 @@ add('GET', '/api/admin/dashboard', () => {
       messages: get('SELECT COUNT(*) n FROM messages').n,
       customers: get('SELECT COUNT(*) n FROM customers').n,
       newOrders: get("SELECT COUNT(*) n FROM orders WHERE status='جديد'").n,
+      revenue, delivered, paidOrders, avgOrder, topProducts,
+      avgRating: ratings.length ? Math.round((ratings.reduce((a, r) => a + Number(r.avg || 0), 0) / ratings.length) * 10) / 10 : 0,
+      ratingsCount: ratings.reduce((a, r) => a + Number(r.n || 0), 0),
     },
     recentOrders: all('SELECT id, customer_name, phone, total, status, source, created_at FROM orders ORDER BY id DESC LIMIT 6'),
     recentConversations: all(`SELECT c.id, c.platform, c.name, c.psid, c.updated_at,
@@ -331,7 +346,10 @@ add('DELETE', '/api/admin/categories/:id', ({ params }) => {
 }, { auth: true });
 
 add('GET', '/api/admin/products', () => ({
-  items: all(`SELECT p.*, c.name_ar AS category_name FROM products p LEFT JOIN categories c ON c.id=p.category_id ORDER BY p.id DESC`),
+  items: all(`SELECT p.*, c.name_ar AS category_name,
+      (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS avg_rating,
+      (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS rating_count
+    FROM products p LEFT JOIN categories c ON c.id=p.category_id ORDER BY p.id DESC`),
 }), { auth: true });
 add('POST', '/api/admin/products', ({ body }) => {
   const name = str(body.name_ar);
@@ -370,7 +388,9 @@ add('PUT', '/api/admin/orders/:id', async ({ params, body }) => {
   const status = str(body.status);
   if (!allowed.includes(status)) return { status: 400, body: { error: 'حالة غير صالحة' } };
   const changed = status !== o.status;
-  run('UPDATE orders SET status=? WHERE id=?', status, id);
+  const paidVal = body.paid === undefined ? Number(o.paid || 0) : (Number(body.paid) ? 1 : 0);
+  run('UPDATE orders SET status=?, paid=? WHERE id=?', status, paidVal, id);
+  if (paidVal && !o.paid) run('UPDATE orders SET paid=1 WHERE id=?', id);
   if (changed) {
     let itemsLine = '';
     try { itemsLine = JSON.parse(o.items_json || '[]').map(i => `${i.name} ×${i.qty}`).join('، '); } catch {}
@@ -436,6 +456,18 @@ add('PUT', '/api/admin/faqs/:id', ({ params, body }) => {
 }, { auth: true });
 add('DELETE', '/api/admin/faqs/:id', ({ params }) => {
   run('DELETE FROM faqs WHERE id=?', num(params.id));
+  return { ok: true };
+}, { auth: true });
+
+add('GET', '/api/admin/reviews', () => ({ items: all('SELECT * FROM reviews ORDER BY id DESC LIMIT 200') }), { auth: true });
+add('POST', '/api/admin/reviews', ({ body }) => {
+  const pid = Number(body.product_id);
+  if (!pid) return { status: 400, body: { error: 'product_id مطلوب' } };
+  const info = run('INSERT INTO reviews (product_id, order_id, customer_name, phone, rating, text, created_at) VALUES (?,?,?,?,?,?,?)', pid, Number(body.order_id) || 0, str(body.customer_name).slice(0, 120), str(body.phone).slice(0, 40), Math.max(1, Math.min(5, Number(body.rating) || 5)), str(body.text).slice(0, 1000), now());
+  return { ok: true, id: Number(info.lastInsertRowid) };
+}, { auth: true });
+add('DELETE', '/api/admin/reviews/:id', ({ params }) => {
+  run('DELETE FROM reviews WHERE id=?', num(params.id));
   return { ok: true };
 }, { auth: true });
 
@@ -617,6 +649,13 @@ add('POST', '/webhooks/whatsapp', async ({ req, raw, body, res }) => {
             const token = waCredentials().token;
             const meta = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/${msg.image.id}?fields=url&access_token=${encodeURIComponent(token)}`).then(r => r.json()).catch(() => ({}));
             if (meta.url) image = await fetchImage(meta.url, token);
+          }
+          if (msg.voice?.id) {
+            await handleIncoming({
+              platform: 'whatsapp', psid: str(msg.from), name: str(contact?.profile?.name),
+              text: '🎤 استلمنا صوتك — اكتب سؤالك بالكتابة أو أرسل صورة المنتج وسأساعدك فوراً 🤍',
+            });
+            return;
           }
           await handleIncoming({
             platform: 'whatsapp', psid: str(msg.from), name: str(contact?.profile?.name),
