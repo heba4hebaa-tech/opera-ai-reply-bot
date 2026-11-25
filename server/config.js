@@ -41,7 +41,8 @@ module.exports = {
   FACEBOOK_APP_ID: env.FACEBOOK_APP_ID || '',
   FACEBOOK_APP_SECRET: env.FACEBOOK_APP_SECRET || '',
   GEMINI_API_KEY: env.GEMINI_API_KEY || '',
-  GEMINI_MODEL: env.GEMINI_MODEL || 'gemini-2.5-flash',
+  GEMINI_MODEL: env.GEMINI_MODEL || 'gemini-3.5-flash',
+  GROQ_API_KEY: env.GROQ_API_KEY || '',
   DB_PATH: path.join(ROOT, 'data', 'app.db'),
   PUBLIC_DIR: path.join(ROOT, 'public'),
 };

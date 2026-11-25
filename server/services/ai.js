@@ -71,6 +71,23 @@ async function askAI(message, history = []) {
       return null;
     }
   }
+  // بديل مجاني سريع (Groq) يعمل بنفس تنسيق OpenAI
+  if (config.GROQ_API_KEY) {
+    try {
+      const msgs = normalized.map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.parts.map(p => p.text).join(' ') }));
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${config.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'system', content: buildSystemPrompt(getSettings().bot_tone) }, ...msgs], temperature: 0.6, max_tokens: 500 }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const t = d.choices?.[0]?.message?.content?.trim();
+        if (t) return t;
+      }
+    } catch (e) { console.error('[AI] Groq error:', e.message); }
+  }
   return null;
 }
 

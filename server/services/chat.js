@@ -117,7 +117,8 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
   let sent = { ok: true, skipped: !sendReply };
   if (sendReply) {
     sent = await platforms.send(platform, psid, reply);
-    if (all('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'out').n <= 1) {
+    const outCount = all('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'out').n;
+    if (outCount === 1 || outCount % 3 === 0) {
       await platforms.sendOptions(platform, psid, 'اختر ما تريد:', ['عرض المنتجات', 'أريد الطلب', 'مساعدة']);
     }
   }
