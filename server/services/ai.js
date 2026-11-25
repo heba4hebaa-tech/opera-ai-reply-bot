@@ -133,7 +133,8 @@ function ruleReply(message) {
       out += '\nتقدر تخصّص اللون والمقاس وأجهّز طلبك فوراً 🛍️';
       return out;
     }
-    return `ما المنتج الذي تريد معرفة سعره؟ 🏷️ اكتب اسمه أو أرسل صورته. أو اكتب «عرض المنتجات» لرؤية الكتالوج كاملاً.`;
+    const top = products.slice(0, 3).map(p => `${p.name_ar} ${Number(p.price).toLocaleString('ar-SA')} ${s.currency || ''}`.trim());
+    return top.length ? `الأسعار المتاحة: ${top.join(' · ')} 💫\nأي واحد تفضل؟` : 'الأسعار غير متاحة حالياً.';
   }
   if (/طلب|اطلب|اوصي|شراء|order/.test(m)) {
     return `يسعدني مساعدتك في الطلب 🛒\nاكتب لي: اسم المنتج + الكمية + اسمك + رقم الجوال + العنوان.\nأو تصفّح المنتجات واطلب من المتجر مباشرة.${s.catalog_url ? `\n${s.catalog_url}` : ''}`;
