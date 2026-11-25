@@ -17,8 +17,8 @@ const base = process.env.BASE || 'https://opera-ai-reply-bot.onrender.com';
     wa_access_token: config.WA_ACCESS_TOKEN,
     messenger_page_token: config.MESSENGER_PAGE_TOKEN,
     messenger_page_id: '1428737297000917',
-    messenger_link: 'https://m.me/61596640424015',
-    facebook_page_id: '61596640424015',
+    messenger_link: 'https://m.me/1428737297000917',
+    facebook_page_id: '1428737297000917',
     facebook_page_token: config.FACEBOOK_PAGE_TOKEN || config.MESSENGER_PAGE_TOKEN,
     ai_enabled: '1', bot_tone: 'ودود ومختصر',
   };
