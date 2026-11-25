@@ -193,6 +193,7 @@ if (db.prepare('SELECT COUNT(*) AS n FROM products').get().n === 0) {
   insProd.run(1, 'منتج تجريبي ٢', 'Sample 2', 'وصف المنتج التجريدي - استبدله من لوحة الأدمن', 149, 0, '🎀', 30, now());
   insProd.run(2, 'عرض تجريبي', 'Sample offer', 'خصم لفترة محدودة', 59, 99, '🏷️', 20, now());
   insProd.run(3, 'خدمة تجريبية', 'Sample service', 'اشرح خدمتك هنا', 199, 0, '🧩', 100, now());
+  insProd.run(1, 'قميص تجريبي', 'Sample shirt', 'قميص قطني بألوان ومقاسات متعددة', 50, 0, '👕', 50, now());
 }
 
 if (db.prepare('SELECT COUNT(*) AS n FROM faqs').get().n === 0) {

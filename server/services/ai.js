@@ -96,8 +96,7 @@ function ruleReply(message) {
       if (sizes.length) out += `\nالمقاسات: ${sizes.join('، ')}`;
       return out;
     }
-    const t = require('./catalog').priceListText();
-    return t + (s.catalog_url ? `\n\nالكتالوج: ${s.catalog_url}` : '');
+    return `لم أجد منتجاً بهذا الاسم في الكتالوج حالياً. ${s.catalog_url ? `تصفّح الكتالوج: ${s.catalog_url}` : 'اكتب «المنتجات» لعرض الكتالوج.'}`;
   }
   if (/طلب|اطلب|اوصي|شراء|order/.test(m)) {
     return `يسعدني مساعدتك في الطلب 🛒\nاكتب لي: اسم المنتج + الكمية + اسمك + رقم الجوال + العنوان.\nأو تصفّح المنتجات واطلب من المتجر مباشرة.${s.catalog_url ? `\n${s.catalog_url}` : ''}`;
