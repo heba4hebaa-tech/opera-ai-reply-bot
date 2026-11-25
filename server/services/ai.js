@@ -105,6 +105,18 @@ function stripTashkeel(s) {
     .toLowerCase().trim();
 }
 
+function close(text, words) {
+  const parts = String(text || '').split(/\s+/).filter(Boolean);
+  const dist = (a, b) => {
+    const dp = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+    for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return dp[a.length][b.length];
+  };
+  return parts.some(p => words.some(w => p.includes(w) || w.includes(p) || (p.length >= 3 && w.length >= 3 && dist(p, w) <= 2)));
+}
+
 function ruleReply(message) {
   const m = stripTashkeel(message);
   const s = require('../db').getSettings();
@@ -113,7 +125,7 @@ function ruleReply(message) {
   }
   if (/شكر|thank|تمم/.test(m)) return `العفو 🤍 ${s.footer_text || 'يسعدنا خدمتك'}`;
   if (/كتالوج|منتجات|المنتجات|الاصناف|catalog|ماذا تبيع|ماذا تبيعون/.test(m)) return catalogText();
-  if (/سعر|الاسعار|كم|price|بكم/.test(m)) {
+  if (close(m, ['سعر', 'اسعار', 'كم', 'price', 'بكم'])) {
     const products = require('../db').all('SELECT id, name_ar, price, description, image_url, icon, colors_json, sizes_json FROM products WHERE active=1 ORDER BY id DESC');
     const matched = products.find(p => {
       if (!p.name_ar) return false;
@@ -136,7 +148,7 @@ function ruleReply(message) {
     const top = products.slice(0, 3).map(p => `${p.name_ar} ${Number(p.price).toLocaleString('ar-SA')} ${s.currency || ''}`.trim());
     return top.length ? `الأسعار المتاحة: ${top.join(' · ')} 💫\nأي واحد تفضل؟` : 'الأسعار غير متاحة حالياً.';
   }
-  if (/طلب|اطلب|اوصي|شراء|order/.test(m)) {
+  if (close(m, ['طلب', 'اطلب', 'اوصي', 'شراء', 'order'])) {
     return `تمام، خلينا نجهّز طلبك 🛒\nاختر المنتج من الأزرار بالأسفل أو اكتب اسمه، ثم أرسل الكمية واسمك ورقم جوالك — وأنا أتولّى الباقي.`;
   }
   if (/توصيل|شحن|دلفري|delivery|متى/.test(m)) {
@@ -151,7 +163,7 @@ function ruleReply(message) {
     return `أقدر أساعدك في:\n• المنتجات والأسعار\n• التوصيل والدفع\n• تقديم طلب\n• أي سؤال آخر\n\nاكتب سؤالك مباشرة 👇`;
   }
   if (/شكوى|مشكله|غاضب|سيء|complaint/.test(m)) return 'آسف جداً لذلك 😔 سأحوّل حالتك للإدارة فوراً ويتواصلون معك لحل المشكلة.';
-  return `فهمت رسالتك 🙂 سأحوّلها للإدارة للرد عليك. يمكنك أيضاً كتابة "المنتجات" لعرض الكتالوج أو "أريد الطلب" للمساعدة.`;
+  return `وصلني سؤالك 🤍 خليني أساعدك بشكل أدق: أقدر أعرض لك المنتجات وأسعارها، أو أجهّز لك طلبك مباشرة. اختار من الأزرار بالأسفل وسأكمل معك فوراً.`;
 }
 
 module.exports = { askAI, askImage, ruleReply, stripTashkeel };
