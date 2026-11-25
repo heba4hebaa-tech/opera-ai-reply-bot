@@ -147,7 +147,9 @@ add('GET', '/api/store/info', () => {
   return {
     businessName: s.business_name, currency: s.currency, country: s.country, footerText: s.footer_text,
     whatsappNumber: s.whatsapp_number, messengerLink: s.messenger_link, messengerPageId: s.messenger_page_id,
-    catalogUrl: s.catalog_url,
+    catalogUrl: s.catalog_url, logoUrl: s.logo_url,
+    deliveryFee: num(s.delivery_fee), deliveryFreeThreshold: num(s.delivery_free_threshold),
+    deliveryNote: s.delivery_note, deliveryMethods: String(s.delivery_methods || '').split('،').map(x => x.trim()).filter(Boolean),
   };
 });
 
@@ -177,12 +179,16 @@ add('POST', '/api/store/orders', ({ body, customer }) => {
     qty: Math.max(1, Math.min(99, num(i.qty))),
     options: str(i.options).slice(0, 200),
   }));
-  const total = clean.reduce((s, i) => s + i.price * i.qty, 0);
-  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, latitude, longitude)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+  const subtotal = clean.reduce((s, i) => s + i.price * i.qty, 0);
+  const s2 = getSettings();
+  const method = str(body.delivery_method) || 'توصيل للمنزل';
+  const fee = method === 'توصيل للمنزل' && subtotal < num(s2.delivery_free_threshold) ? num(s2.delivery_fee) : 0;
+  const total = subtotal + fee;
+  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, latitude, longitude, delivery_fee, delivery_method)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     name.slice(0, 120), phone.slice(0, 40), str(body.address).slice(0, 300), str(body.notes).slice(0, 500),
     JSON.stringify(clean), total, 'جديد', 'المتجر', now(), customer?.id || 0,
-    num(customer?.latitude || body.latitude), num(customer?.longitude || body.longitude));
+    num(customer?.latitude || body.latitude), num(customer?.longitude || body.longitude), fee, method);
   return { ok: true, orderId: Number(info.lastInsertRowid), total };
 });
 
@@ -366,6 +372,26 @@ add('DELETE', '/api/admin/orders/:id', ({ params }) => {
 }, { auth: true });
 
 add('GET', '/api/admin/webhook-events', () => ({ items: all('SELECT id, platform, payload, created_at FROM webhook_events ORDER BY id DESC LIMIT 20') }), { auth: true });
+add('GET', '/api/admin/orders/:id/invoice', ({ params, res }) => {
+  const o = get('SELECT * FROM orders WHERE id=?', num(params.id));
+  if (!o) return text(res, 404, 'طلب غير موجود');
+  const s = getSettings();
+  const items = JSON.parse(o.items_json || '[]');
+  const money = n => `${Number(n).toLocaleString('ar-SA')} ${s.currency || ''}`.trim();
+  const rows = items.map((i, k) => `<tr><td>${k + 1}</td><td>${esc(i.name)}</td><td>${esc(i.options || '—')}</td><td>${i.qty}</td><td>${money(i.price)}</td><td>${money(i.price * i.qty)}</td></tr>`).join('');
+  const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>فاتورة #${o.id} - ${esc(s.business_name)}</title>
+  <style>body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#222;margin:30px;direction:rtl}h1,h2{margin:0}header{display:flex;justify-content:space-between;border-bottom:3px solid #b76e59;padding-bottom:14px;margin-bottom:22px}
+  .brand{font-size:26px;color:#b76e59;font-weight:800;letter-spacing:1px}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #ddd;padding:9px;text-align:right}th{background:#fbefec;color:#8b4d3c}.box{border:1px solid #ddd;border-radius:8px;padding:12px;margin-top:18px}.total{font-size:20px;font-weight:800;color:#8b4d3c}.no-print{margin-bottom:16px}@media print{.no-print{display:none}body{margin:0}}</style></head><body>
+  <div class="no-print"><button onclick="window.print()">🖨️ طباعة الفاتورة</button></div>
+  <header><div><img src="${esc(s.logo_url || '/logo.svg')}" style="height:60px"><div class="brand">${esc(s.business_name)}</div></div>
+  <div><h2>فاتورة طلب</h2><div>رقم الطلب: <b>#${o.id}</b></div><div>التاريخ: ${fmtDate(o.created_at)}</div><div>الحالة: ${esc(o.status)}</div></div></header>
+  <div class="box"><b>الزبون:</b> ${esc(o.customer_name)} · <b>الجوال:</b> <span dir="ltr">${esc(o.phone)}</span><br><b>العنوان:</b> ${esc(o.address || '—')}<br><b>التوصيل:</b> ${esc(o.delivery_method || 'توصيل للمنزل')} ${o.latitude ? `· ${Number(o.latitude).toFixed(4)}, ${Number(o.longitude).toFixed(4)}` : ''}</div>
+  <table><thead><tr><th>#</th><th>المنتج</th><th>التخصيص</th><th>الكمية</th><th>السعر</th><th>المجموع</th></tr></thead><tbody>${rows}</tbody></table>
+  <div class="box"><div>المجموع الفرعي: ${money(items.reduce((x,i)=>x+i.price*i.qty,0))}</div><div>رسوم التوصيل: ${money(o.delivery_fee || 0)}</div><div class="total">الإجمالي: ${money(o.total)}</div></div>
+  <p style="margin-top:24px;color:#777;text-align:center">شكراً لتسوقكم من ${esc(s.business_name)} 🤍</p></body></html>`;
+  return text(res, 200, html, 'text/html; charset=utf-8');
+}, { auth: true });
+
 add('GET', '/api/admin/otps', () => ({
   items: all('SELECT phone, code, expires_at, used, created_at FROM otp_codes ORDER BY id DESC LIMIT 20'),
 }), { auth: true });
@@ -395,7 +421,7 @@ add('DELETE', '/api/admin/faqs/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
-const SETTING_KEYS = ['business_name', 'currency', 'country', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
 add('GET', '/api/admin/settings', () => {
   const s = getSettings();
   const out = {}; SETTING_KEYS.forEach(k => out[k] = s[k] ?? '');

@@ -261,12 +261,13 @@
       <td><b style="color:var(--teal-dark);">${money(o.total, '')}</b></td>
       <td class="small muted">${esc(o.source)}</td>
       <td><select data-os="${o.id}" style="width:auto;padding:5px 8px;">${statuses.map(s => `<option ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
-      <td><button class="icon-btn" data-od="${o.id}" title="حذف">🗑️</button></td>
+      <td><button class="btn btn-ghost btn-sm" data-inv="${o.id}">🖨️ فاتورة</button> <button class="icon-btn" data-od="${o.id}" title="حذف">🗑️</button></td>
     </tr>`).join('') : `<tr><td colspan="8" class="empty">لا توجد طلبات بعد</td></tr>`;
     $('orderRows').querySelectorAll('[data-os]').forEach(s => s.onchange = async () => {
       await api('/api/admin/orders/' + s.dataset.os, { method: 'PUT', body: { status: s.value } });
       toast('تم تحديث الحالة'); loadOverview();
     });
+    $('orderRows').querySelectorAll('[data-inv]').forEach(b => b.onclick = () => window.open(`/api/admin/orders/${b.dataset.inv}/invoice`, '_blank'));
     $('orderRows').querySelectorAll('[data-od]').forEach(b => b.onclick = () => confirmBox('حذف الطلب نهائياً؟', async () => {
       await api('/api/admin/orders/' + b.dataset.od, { method: 'DELETE' }); toast('تم الحذف'); loadOrders(); loadOverview();
     }));
@@ -353,7 +354,7 @@
   }
 
   $('saveSettings').onclick = async () => {
-    const keys = ['business_name', 'currency', 'country', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+    const keys = ['business_name', 'currency', 'country', 'logo_url', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
     const payload = {};
     for (const k of keys) {
       const el = $('set_' + k);

@@ -29,6 +29,7 @@
   function renderInfo() {
     const s = state.info;
     if (s.businessName) { $('brandName').textContent = s.businessName; document.title = `${s.businessName} | تسوّق وتكلّم معنا`; }
+    if (s.logoUrl && $('brandLogo')) $('brandLogo').src = s.logoUrl;
     if (s.footerText) $('footerText').textContent = s.footerText;
     const wa = String(s.whatsappNumber || '').replace(/\D/g, '');
     const waUrl = wa ? `https://wa.me/${wa}?text=${encodeURIComponent('مرحباً، أريد الاستفسار عن منتجاتكم')}` : '';
@@ -285,6 +286,9 @@
       <div class="row"><button type="button" class="btn btn-ghost btn-sm" id="coMap">🗺️ تعديل الموقع</button>
       <span class="small muted" id="coCoords">${c.latitude ? `${Number(c.latitude).toFixed(4)}, ${Number(c.longitude).toFixed(4)}` : 'بدون موقع'}</span></div>
       <input type="hidden" id="co_lat" value="${c.latitude || 0}"><input type="hidden" id="co_lng" value="${c.longitude || 0}">
+      <div class="form-row two"><div><label>طريقة التوصيل</label><select id="co_method">${(state.info.deliveryMethods || ['توصيل للمنزل', 'استلام من المتجر']).map(m => `<option>${esc(m)}</option>`).join('')}</select></div>
+      <div><label>رسوم التوصيل</label><input id="co_fee" readonly value="${money(state.info.deliveryFee || 0, cur)}"></div></div>
+      <p class="small muted">${esc(state.info.deliveryNote || '')}</p>
       <div class="form-row" style="margin-top:12px;"><label>ملاحظات</label><textarea id="co_notes" style="min-height:70px;"></textarea></div>
       <div class="card" style="box-shadow:none;background:#f6f9fb;padding:12px;"><div class="between">
         <span>الإجمالي</span><b style="color:var(--teal-dark);font-size:18px;">${money(state.cart.reduce((s,i)=>s+i.price*i.qty,0), cur)}</b></div></div>
@@ -297,6 +301,7 @@
       const r = await api('/api/store/orders', { method: 'POST', body: {
         customer_name: $('co_name').value, phone: $('co_phone').value, address: $('co_address').value,
         notes: $('co_notes').value, items_json: JSON.stringify(state.cart),
+        delivery_method: $('co_method').value,
         latitude: Number($('co_lat').value), longitude: Number($('co_lng').value),
       } });
       btn.disabled = false; btn.textContent = 'تأكيد الطلب';

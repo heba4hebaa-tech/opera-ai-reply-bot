@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 110" width="320" height="110">
+  <defs><linearGradient id="r" x1="0" x2="1" y2="1"><stop stop-color="#f6d4c4"/><stop offset=".45" stop-color="#c9816c"/><stop offset="1" stop-color="#9c5c4b"/></linearGradient></defs>
+  <g fill="none" stroke="url(#r)" stroke-linecap="round">
+    <path d="M26 44h58" stroke-width="5"/><path d="M38 44V30a9 9 0 0 1 18 0v14" stroke-width="4"/>
+    <path d="M22 44h66l7 42a8 8 0 0 1-8 9H23a8 8 0 0 1-8-9z" stroke-width="4"/>
+    <path d="M45 44v20c0 8 8 12 15 6" stroke-width="3"/>
+    <path d="M83 60l6-7 6 7-6 7z" stroke-width="2"/>
+  </g>
+  <text x="112" y="70" font-family="Georgia,serif" font-size="39" fill="url(#r)" font-weight="bold">LUNZERA</text>
+  <text x="114" y="90" font-family="Tahoma,Arial" font-size="10" fill="#a96d5a" letter-spacing="3">FASHION &amp; BAGS</text>
+</svg>
