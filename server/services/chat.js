@@ -125,15 +125,13 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
   let sent = { ok: true, skipped: !sendReply };
   if (sendReply) {
     sent = await platforms.send(platform, psid, reply);
-    const outCount = all('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'out').n;
-    if (outCount === 1 || outCount % 3 === 0) {
-      let buttons = ['عرض المنتجات', 'أريد الطلب', 'مساعدة'];
-      if (close(stripTashkeel(text), ['سعر', 'اسعار', 'كم', 'price', 'بكم'])) {
-        const names = all('SELECT name_ar FROM products WHERE active=1 ORDER BY id DESC LIMIT 3').map(x => x.name_ar);
-        if (names.length) buttons = names;
-      }
-      await platforms.sendOptions(platform, psid, 'اختر من الخيارات:', buttons);
+    let buttons = ['عرض المنتجات', 'أريد الطلب', 'مساعدة'];
+    if (close(stripTashkeel(text), ['سعر', 'اسعار', 'كم', 'price', 'بكم'])) {
+      const names = all('SELECT name_ar FROM products WHERE active=1 ORDER BY id DESC LIMIT 3').map(x => x.name_ar);
+      if (names.length) buttons = names;
     }
+    const opts = await platforms.sendOptions(platform, psid, 'اختر من الخيارات:', buttons);
+    console.log(`[Options] ${platform} ${buttons.join(' | ')} -> ${JSON.stringify(opts)}`);
   }
   // ترحيب عند أول لقاء (مرة واحدة لكل محادثة)
   if (String(getSettings().ai_enabled) !== '1' && all('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'out').n === 1) {
