@@ -372,7 +372,7 @@ add('DELETE', '/api/admin/faqs/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
-const SETTING_KEYS = ['business_name', 'currency', 'country', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+const SETTING_KEYS = ['business_name', 'currency', 'country', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
 add('GET', '/api/admin/settings', () => {
   const s = getSettings();
   const out = {}; SETTING_KEYS.forEach(k => out[k] = s[k] ?? '');
@@ -381,6 +381,7 @@ add('GET', '/api/admin/settings', () => {
     gemini: !!config.GEMINI_API_KEY, model: config.GEMINI_MODEL,
     whatsapp: !!(wa.token && wa.phoneId), whatsappFromSettings: !!s.wa_phone_number_id,
     messenger: !!(s.messenger_page_token || config.MESSENGER_PAGE_TOKEN),
+    facebook: !!(s.facebook_page_id || config.FACEBOOK_PAGE_ID),
   } };
 }, { auth: true });
 add('PUT', '/api/admin/settings', ({ body }) => {
