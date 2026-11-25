@@ -65,6 +65,28 @@ function setSessionCookie(res, token) {
   res.setHeader('Set-Cookie', `op_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure}`);
 }
 
+function customerToken(id) {
+  const payload = Buffer.from(JSON.stringify({ c: id, exp: Date.now() + 30 * 24 * 3600 * 1000 })).toString('base64url');
+  const sig = crypto.createHmac('sha256', config.SESSION_SECRET).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+function readCustomer(req) {
+  const token = parseCookies(req).op_customer;
+  if (!token || !token.includes('.')) return null;
+  const [payload, sig] = token.split('.');
+  const expected = crypto.createHmac('sha256', config.SESSION_SECRET).update(payload).digest('base64url');
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    if (!data.exp || data.exp < Date.now()) return null;
+    return get('SELECT * FROM customers WHERE id = ?', data.c) || null;
+  } catch { return null; }
+}
+function setCustomerCookie(res, token) {
+  const secure = res.localsProto === 'https' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `op_customer=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`);
+}
+
 function verifyWebhookSignature(req, raw) {
   if (!config.META_APP_SECRET) return true;
   const sig = req.headers['x-hub-signature-256'];
@@ -112,25 +134,27 @@ add('GET', '/api/health', () => ({ ok: true, time: now() }));
 add('GET', '/api/store/info', () => {
   const s = getSettings();
   return {
-    businessName: s.business_name, currency: s.currency, footerText: s.footer_text,
-    whatsappNumber: s.whatsapp_number, messengerLink: s.messenger_link, catalogUrl: s.catalog_url,
+    businessName: s.business_name, currency: s.currency, country: s.country, footerText: s.footer_text,
+    whatsappNumber: s.whatsapp_number, messengerLink: s.messenger_link, messengerPageId: s.messenger_page_id,
+    catalogUrl: s.catalog_url,
   };
 });
 
 add('GET', '/api/store/categories', () => ({
-  items: all('SELECT id, name_ar, name_en, description, icon FROM categories WHERE active = 1 ORDER BY sort_order, id'),
+  items: all('SELECT id, name_ar, name_en, description, icon, has_options, colors_json, sizes_json FROM categories WHERE active = 1 ORDER BY sort_order, id'),
 }));
 
 add('GET', '/api/store/products', ({ query }) => {
   const cat = Number(query.get('category') || 0);
   const q = str(query.get('q') || '');
+  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json';
   const rows = cat
-    ? all('SELECT id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock FROM products WHERE active=1 AND category_id=? ORDER BY id DESC', cat)
-    : all('SELECT id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock FROM products WHERE active=1 ORDER BY id DESC');
+    ? all(`SELECT ${fields} FROM products WHERE active=1 AND category_id=? ORDER BY id DESC`, cat)
+    : all(`SELECT ${fields} FROM products WHERE active=1 ORDER BY id DESC`);
   return { items: q ? rows.filter(p => (p.name_ar + p.name_en + p.description).toLowerCase().includes(q.toLowerCase())) : rows };
 });
 
-add('POST', '/api/store/orders', ({ body }) => {
+add('POST', '/api/store/orders', ({ body, customer }) => {
   const name = str(body.customer_name);
   const phone = str(body.phone);
   if (!name || !phone) return { status: 400, body: { error: 'الاسم ورقم الجوال مطلوبان' } };
@@ -138,13 +162,16 @@ add('POST', '/api/store/orders', ({ body }) => {
   try { items = JSON.parse(body.items_json || '[]'); } catch { items = []; }
   if (!Array.isArray(items) || !items.length) return { status: 400, body: { error: 'السلة فارغة' } };
   const clean = items.map(i => ({
-    id: num(i.id), name: str(i.name).slice(0, 200), price: num(i.price), qty: Math.max(1, Math.min(99, num(i.qty))),
+    id: num(i.id), name: str(i.name).slice(0, 200), price: num(i.price),
+    qty: Math.max(1, Math.min(99, num(i.qty))),
+    options: str(i.options).slice(0, 200),
   }));
   const total = clean.reduce((s, i) => s + i.price * i.qty, 0);
-  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at)
-                    VALUES (?,?,?,?,?,?,?,?,?)`,
+  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, latitude, longitude)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
     name.slice(0, 120), phone.slice(0, 40), str(body.address).slice(0, 300), str(body.notes).slice(0, 500),
-    JSON.stringify(clean), total, 'جديد', 'المتجر', now());
+    JSON.stringify(clean), total, 'جديد', 'المتجر', now(), customer?.id || 0,
+    num(customer?.latitude || body.latitude), num(customer?.longitude || body.longitude));
   return { ok: true, orderId: Number(info.lastInsertRowid), total };
 });
 
@@ -162,6 +189,66 @@ add('POST', '/api/auth/logout', ({ res }) => {
 });
 add('GET', '/api/auth/me', ({ user }) => ({ user }));
 
+// ------------------------- customer login (OTP) -------------------------
+function normalizePhone(v) {
+  let p = str(v).replace(/[^\d+]/g, '');
+  if (p.startsWith('00')) p = '+' + p.slice(2);
+  else if (/^0\d{9}$/.test(p)) p = '+218' + p.slice(1);
+  else if (!p.startsWith('+')) p = '+' + p;
+  return p;
+}
+add('POST', '/api/customer/send-code', ({ body }) => {
+  const phone = normalizePhone(body.phone);
+  if (phone.replace(/\D/g, '').length < 8) return { status: 400, body: { error: 'رقم الجوال غير صالح' } };
+  run('UPDATE otp_codes SET used=1 WHERE phone=? AND used=0', phone);
+  const code = String(crypto.randomInt(100000, 999999));
+  run('INSERT INTO otp_codes (phone, code, expires_at, used, created_at) VALUES (?,?,?,0,?)', phone, code, Date.now() + 10 * 60 * 1000, now());
+  // لا يوجد مزوّد SMS مجاني: الرمز يظهر هنا للمطوّر وللأدمن في «طلبات التحقق»
+  return { ok: true, demoCode: code, phone };
+});
+add('POST', '/api/customer/verify', ({ body, res }) => {
+  const phone = normalizePhone(body.phone);
+  const code = str(body.code);
+  const row = get('SELECT * FROM otp_codes WHERE phone=? AND code=? AND used=0 ORDER BY id DESC LIMIT 1', phone, code);
+  if (!row) return { status: 400, body: { error: 'الرمز غير صحيح' } };
+  if (row.expires_at < Date.now()) return { status: 400, body: { error: 'انتهت صلاحية الرمز، اطلب رمزاً جديداً' } };
+  run('UPDATE otp_codes SET used=1 WHERE id=?', row.id);
+  let customer = get('SELECT * FROM customers WHERE phone=?', phone);
+  if (!customer) {
+    run('INSERT INTO customers (phone, name, created_at) VALUES (?,?,?)', phone, '', now());
+    customer = get('SELECT * FROM customers WHERE phone=?', phone);
+  }
+  setCustomerCookie(res, customerToken(customer.id));
+  return { ok: true, customer };
+});
+add('POST', '/api/customer/logout', ({ res }) => {
+  res.setHeader('Set-Cookie', 'op_customer=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+  return { ok: true };
+});
+add('GET', '/api/customer/me', ({ customer }) => ({ customer: customer || null }));
+add('PUT', '/api/customer/profile', ({ customer, body }) => {
+  if (!customer) return { status: 401, body: { error: 'يرجى تسجيل الدخول أولاً' } };
+  run('UPDATE customers SET name=?, city=?, address=?, latitude=?, longitude=? WHERE id=?',
+    str(body.name).slice(0, 120), str(body.city).slice(0, 120), str(body.address).slice(0, 300),
+    num(body.latitude), num(body.longitude), customer.id);
+  return { ok: true, customer: get('SELECT * FROM customers WHERE id=?', customer.id) };
+});
+
+// رفع صور/أيقونات من جهاز المستخدم (يُحفظ تحت public/uploads)
+add('POST', '/api/admin/upload', ({ req, raw }) => {
+  if (!raw.length) return { status: 400, body: { error: 'لم يُرفع أي ملف' } };
+  if (raw.length > 8 * 1024 * 1024) return { status: 400, body: { error: 'الحد الأقصى 8 ميجابايت' } };
+  const types = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' };
+  const ctype = String(req.headers['content-type'] || '').split(';')[0].trim();
+  let ext = types[ctype] || path.extname(str(req.headers['x-file-name'])).replace('.', '').toLowerCase();
+  ext = String(ext || 'bin').replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'bin';
+  const dir = path.join(config.PUBLIC_DIR, 'uploads');
+  fs.mkdirSync(dir, { recursive: true });
+  const name = `${crypto.randomUUID()}.${ext}`;
+  fs.writeFileSync(path.join(dir, name), raw);
+  return { ok: true, url: `/uploads/${name}` };
+}, { auth: true });
+
 // ------------------------- admin API -------------------------
 add('GET', '/api/admin/dashboard', () => {
   const s = getSettings();
@@ -172,6 +259,7 @@ add('GET', '/api/admin/dashboard', () => {
       categories: get('SELECT COUNT(*) n FROM categories').n,
       conversations: get('SELECT COUNT(*) n FROM conversations').n,
       messages: get('SELECT COUNT(*) n FROM messages').n,
+      customers: get('SELECT COUNT(*) n FROM customers').n,
       newOrders: get("SELECT COUNT(*) n FROM orders WHERE status='جديد'").n,
     },
     recentOrders: all('SELECT id, customer_name, phone, total, status, source, created_at FROM orders ORDER BY id DESC LIMIT 6'),
@@ -181,7 +269,7 @@ add('GET', '/api/admin/dashboard', () => {
     config: {
       gemini: !!config.GEMINI_API_KEY,
       whatsapp: !!(s.wa_phone_number_id || config.WA_PHONE_NUMBER_ID) && !!(s.wa_access_token || config.WA_ACCESS_TOKEN),
-      messenger: !!config.MESSENGER_PAGE_TOKEN, webhookSecret: !!config.META_APP_SECRET,
+      messenger: !!(s.messenger_page_token || config.MESSENGER_PAGE_TOKEN), webhookSecret: !!config.META_APP_SECRET,
     },
     businessName: s.business_name,
   };
@@ -191,14 +279,16 @@ add('GET', '/api/admin/categories', () => ({ items: all('SELECT * FROM categorie
 add('POST', '/api/admin/categories', ({ body }) => {
   const name = str(body.name_ar);
   if (!name) return { status: 400, body: { error: 'اسم الصنف مطلوب' } };
-  const info = run('INSERT INTO categories (name_ar,name_en,description,icon,active,sort_order,created_at) VALUES (?,?,?,?,?,?,?)',
-    name, str(body.name_en), str(body.description), str(body.icon) || '📦', body.active === false ? 0 : 1, num(body.sort_order), now());
+  const info = run('INSERT INTO categories (name_ar,name_en,description,icon,active,sort_order,has_options,colors_json,sizes_json,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    name, str(body.name_en), str(body.description), str(body.icon) || '📦', body.active === false ? 0 : 1,
+    num(body.sort_order), body.has_options ? 1 : 0, str(body.colors_json), str(body.sizes_json), now());
   return { ok: true, id: Number(info.lastInsertRowid) };
 }, { auth: true });
 add('PUT', '/api/admin/categories/:id', ({ params, body }) => {
   const id = num(params.id);
-  run('UPDATE categories SET name_ar=?,name_en=?,description=?,icon=?,active=?,sort_order=? WHERE id=?',
-    str(body.name_ar), str(body.name_en), str(body.description), str(body.icon) || '📦', body.active === false ? 0 : 1, num(body.sort_order), id);
+  run('UPDATE categories SET name_ar=?,name_en=?,description=?,icon=?,active=?,sort_order=?,has_options=?,colors_json=?,sizes_json=? WHERE id=?',
+    str(body.name_ar), str(body.name_en), str(body.description), str(body.icon) || '📦', body.active === false ? 0 : 1,
+    num(body.sort_order), body.has_options ? 1 : 0, str(body.colors_json), str(body.sizes_json), id);
   return { ok: true };
 }, { auth: true });
 add('DELETE', '/api/admin/categories/:id', ({ params }) => {
@@ -213,16 +303,18 @@ add('GET', '/api/admin/products', () => ({
 add('POST', '/api/admin/products', ({ body }) => {
   const name = str(body.name_ar);
   if (!name) return { status: 400, body: { error: 'اسم المنتج مطلوب' } };
-  const info = run(`INSERT INTO products (category_id,name_ar,name_en,description,price,old_price,image_url,icon,stock,active,created_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+  const info = run(`INSERT INTO products (category_id,name_ar,name_en,description,price,old_price,image_url,icon,stock,active,colors_json,sizes_json,created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     num(body.category_id) || null, name, str(body.name_en), str(body.description), num(body.price), num(body.old_price),
-    str(body.image_url), str(body.icon) || '🛍️', num(body.stock), body.active === false ? 0 : 1, now());
+    str(body.image_url), str(body.icon) || '🛍️', num(body.stock), body.active === false ? 0 : 1,
+    str(body.colors_json), str(body.sizes_json), now());
   return { ok: true, id: Number(info.lastInsertRowid) };
 }, { auth: true });
 add('PUT', '/api/admin/products/:id', ({ params, body }) => {
-  run(`UPDATE products SET category_id=?,name_ar=?,name_en=?,description=?,price=?,old_price=?,image_url=?,icon=?,stock=?,active=? WHERE id=?`,
+  run(`UPDATE products SET category_id=?,name_ar=?,name_en=?,description=?,price=?,old_price=?,image_url=?,icon=?,stock=?,active=?,colors_json=?,sizes_json=? WHERE id=?`,
     num(body.category_id) || null, str(body.name_ar), str(body.name_en), str(body.description), num(body.price), num(body.old_price),
-    str(body.image_url), str(body.icon) || '🛍️', num(body.stock), body.active === false ? 0 : 1, num(params.id));
+    str(body.image_url), str(body.icon) || '🛍️', num(body.stock), body.active === false ? 0 : 1,
+    str(body.colors_json), str(body.sizes_json), num(params.id));
   return { ok: true };
 }, { auth: true });
 add('DELETE', '/api/admin/products/:id', ({ params }) => {
@@ -249,6 +341,11 @@ add('DELETE', '/api/admin/orders/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
+add('GET', '/api/admin/otps', () => ({
+  items: all('SELECT phone, code, expires_at, used, created_at FROM otp_codes ORDER BY id DESC LIMIT 20'),
+}), { auth: true });
+add('GET', '/api/admin/customers', () => ({ items: all('SELECT * FROM customers ORDER BY id DESC LIMIT 100') }), { auth: true });
+
 add('GET', '/api/admin/conversations', () => ({
   items: all(`SELECT c.*, (SELECT COUNT(*) FROM messages m WHERE m.conversation_id=c.id) AS msg_count,
     (SELECT text FROM messages m WHERE m.conversation_id=c.id ORDER BY m.id DESC LIMIT 1) AS last_message
@@ -273,12 +370,16 @@ add('DELETE', '/api/admin/faqs/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
-const SETTING_KEYS = ['business_name', 'currency', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+const SETTING_KEYS = ['business_name', 'currency', 'country', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
 add('GET', '/api/admin/settings', () => {
   const s = getSettings();
   const out = {}; SETTING_KEYS.forEach(k => out[k] = s[k] ?? '');
   const wa = waCredentials();
-  return { settings: out, runtime: { gemini: !!config.GEMINI_API_KEY, model: config.GEMINI_MODEL, whatsapp: !!(wa.token && wa.phoneId), whatsappFromSettings: !!s.wa_phone_number_id, messenger: !!config.MESSENGER_PAGE_TOKEN } };
+  return { settings: out, runtime: {
+    gemini: !!config.GEMINI_API_KEY, model: config.GEMINI_MODEL,
+    whatsapp: !!(wa.token && wa.phoneId), whatsappFromSettings: !!s.wa_phone_number_id,
+    messenger: !!(s.messenger_page_token || config.MESSENGER_PAGE_TOKEN),
+  } };
 }, { auth: true });
 add('PUT', '/api/admin/settings', ({ body }) => {
   for (const k of SETTING_KEYS) if (Object.prototype.hasOwnProperty.call(body, k)) setSetting(k, body[k]);
@@ -317,7 +418,19 @@ add('POST', '/api/admin/test-whatsapp', async () => {
   }
 }, { auth: true });
 
-const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs'];
+add('POST', '/api/admin/test-messenger', async () => {
+  const token = getSettings().messenger_page_token || config.MESSENGER_PAGE_TOKEN;
+  if (!token) return { status: 400, body: { error: 'أضف Page Token أولاً' } };
+  try {
+    const url = `https://graph.facebook.com/${config.GRAPH_API_VERSION}/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const data = await res.json();
+    if (!res.ok || !data.data?.is_valid) return { status: 400, body: { error: data.error?.message || 'التوكن غير صالح' } };
+    return { ok: true, type: data.data.type, pageId: data.data.profile_id || '' };
+  } catch (e) { return { status: 400, body: { error: e.message } }; }
+}, { auth: true });
+
+const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes'];
 add('GET', '/api/admin/backup', () => {
   const out = { version: 1, exported_at: now() };
   for (const t of BACKUP_TABLES) out[t] = all(`SELECT * FROM ${t}`);
@@ -418,7 +531,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const raw = ['POST', 'PUT', 'PATCH'].includes(req.method) ? await readBody(req) : Buffer.alloc(0);
     let body = {};
-    if (raw.length) {
+    if (raw.length && pathname !== '/api/admin/upload') {
       try { body = JSON.parse(raw.toString('utf8')); } catch { return json(res, 400, { error: 'JSON غير صالح' }); }
     }
     const m = matched.regex.exec(pathname);
@@ -428,7 +541,7 @@ const server = http.createServer(async (req, res) => {
     if (matched.opts.auth && !user) return json(res, 401, { error: 'يرجى تسجيل الدخول' });
     res.localsProto = String(req.headers['x-forwarded-proto'] || 'http');
 
-    const result = await matched.handler({ req, res, params, query: url.searchParams, body, raw, user });
+    const result = await matched.handler({ req, res, params, query: url.searchParams, body, raw, user, customer: readCustomer(req) });
     if (res.writableEnded) return;
     if (result && typeof result === 'object' && 'status' in result) return json(res, result.status, result.body);
     if (result === undefined) return;

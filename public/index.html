@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>متجرنا | تسوّق وتكلّم معنا</title>
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 </head>
 <body>
   <header class="site-header">
@@ -15,7 +16,10 @@
       <a href="#contact">تواصل معنا</a>
       <a href="/admin">الأدمن</a>
     </nav>
-    <button class="btn btn-outline btn-sm cart-btn" id="cartBtn">🛒 السلة <span class="cart-count" id="cartCount">0</span></button>
+    <div class="row">
+      <button class="btn btn-ghost btn-sm" id="loginBtn">👤 دخول الزبون</button>
+      <button class="btn btn-outline btn-sm cart-btn" id="cartBtn">🛒 السلة <span class="cart-count" id="cartCount">0</span></button>
+    </div>
   </header>
 
   <section class="hero" id="home">
@@ -75,6 +79,7 @@
   <div id="modalRoot"></div>
   <div id="toast"></div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/js/common.js"></script>
   <script src="/js/store.js"></script>
 </body>

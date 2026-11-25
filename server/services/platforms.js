@@ -41,11 +41,12 @@ async function sendWhatsApp(to, text) {
 }
 
 async function sendMessenger(psid, text) {
-  if (!config.MESSENGER_PAGE_TOKEN) {
-    return { ok: false, skipped: true, error: 'المسنجر غير مُعدّ (MESSENGER_PAGE_TOKEN)' };
+  const token = getSettings().messenger_page_token || config.MESSENGER_PAGE_TOKEN;
+  if (!token) {
+    return { ok: false, skipped: true, error: 'المسنجر غير مُعدّ — أضف Page Token من الإعدادات' };
   }
   try {
-    const url = `https://graph.facebook.com/${config.GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(config.MESSENGER_PAGE_TOKEN)}`;
+    const url = `https://graph.facebook.com/${config.GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(token)}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -15,6 +15,7 @@
     <button class="nav-item" data-section="products"><span class="ico">📦</span><span>المنتجات</span></button>
     <button class="nav-item" data-section="orders"><span class="ico">🧾</span><span>الطلبات</span></button>
     <button class="nav-item" data-section="conversations"><span class="ico">💬</span><span>المحادثات</span></button>
+    <button class="nav-item" data-section="customers"><span class="ico">👥</span><span>الزبائن والتحقق</span></button>
     <button class="nav-item" data-section="faqs"><span class="ico">❓</span><span>الأسئلة الشائعة</span></button>
     <div class="nav-sep"></div>
     <button class="nav-item" data-section="tester"><span class="ico">🧪</span><span>اختبار الرد</span></button>
@@ -83,6 +84,16 @@
         <div class="card"><div class="table-wrap"><table><thead><tr><th>المنصة</th><th>الاسم / المعرّف</th><th>آخر رسالة</th><th>عدد الرسائل</th><th>آخر تحديث</th><th></th></tr></thead><tbody id="conversationRows"></tbody></table></div></div>
       </section>
 
+      <!-- customers -->
+      <section class="section" id="sec-customers">
+        <div class="section-head"><div><h2>الزبائن والتحقق</h2><p class="muted small">الزبائن المسجّلون ورموز التحقق (لا يوجد مزوّد SMS مجاني، الرمز يظهر هنا)</p></div></div>
+        <div class="grid grid-2">
+          <div class="card"><h3 class="card-title">👥 الزبائن</h3><div class="table-wrap"><table><thead><tr><th>#</th><th>الجوال</th><th>الاسم</th><th>المدينة</th><th>الموقع</th></tr></thead><tbody id="customerRows"></tbody></table></div></div>
+          <div class="card"><h3 class="card-title">🔐 رموز التحقق</h3><div class="table-wrap"><table><thead><tr><th>الجوال</th><th>الرمز</th><th>الحالة</th></tr></thead><tbody id="otpRows"></tbody></table></div>
+            <p class="small muted">الرمز يظهر للزبون أيضاً عند الطلب في وضع التجربة.</p></div>
+        </div>
+      </section>
+
       <!-- faqs -->
       <section class="section" id="sec-faqs">
         <div class="section-head"><div><h2>الأسئلة الشائعة</h2><p class="muted small">قاعدة المعرفة التي يستخدمها المساعد الذكي في إجاباته</p></div><button class="btn btn-primary" id="addFaq">+ سؤال جديد</button></div>
@@ -119,7 +130,8 @@
           <div class="card">
             <h3 class="card-title">🏪 بيانات المتجر</h3>
             <div class="form-row"><label>اسم المتجر</label><input id="set_business_name"></div>
-            <div class="form-row two"><div><label>العملة</label><input id="set_currency"></div><div><label>رقم واتساب للعرض (زر المحادثة)</label><input id="set_whatsapp_number" placeholder="9665xxxxxxxx"></div></div>
+            <div class="form-row two"><div><label>العملة</label><input id="set_currency"></div><div><label>الدولة</label><input id="set_country"></div></div>
+            <div class="form-row"><label>رقم واتساب للعرض (زر المحادثة)</label><input id="set_whatsapp_number" placeholder="2189xxxxxxxx"></div>
             <div class="form-row"><label>واتساب Phone Number ID (من Meta)</label><input id="set_wa_phone_number_id" placeholder="رقم من Meta Developers"></div>
             <div class="form-row"><label>واتساب Access Token</label><input id="set_wa_access_token" type="password" placeholder="اتركه فارغاً لاستخدام التوكن في .env"></div>
             <div class="row"><button class="btn btn-ghost btn-sm" id="testWhatsapp">🔍 تحقق من رقم النشاط</button><span id="waTestResult" class="small muted"></span></div>
@@ -133,8 +145,15 @@
             <div class="form-row"><label class="check"><input type="checkbox" id="set_ai_enabled"> تفعيل الرد الذكي (عند إيقافه يُستخدم الرد الأساسي)</label></div>
             <div class="form-row"><label>نبرة الرد</label><select id="set_bot_tone"><option>ودود ومختصر</option><option>رسمي ومهني</option><option>حماسي ومرح</option></select></div>
             <div class="form-row"><label>رسالة الترحيب</label><textarea id="set_greeting"></textarea></div>
-            <div class="small muted">مفتاح Gemini والمنصات تُضبط من ملف <code>.env</code>. الحالة الحالية: <span id="runtimeInfo"></span></div>
+            <div class="small muted">مفتاح Gemini يُضبط من ملف <code>.env</code>. الحالة الحالية: <span id="runtimeInfo"></span></div>
           </div>
+        </div>
+        <div class="card" style="margin-top:18px;">
+          <h3 class="card-title">💬 إعدادات مسنجر والصفحة</h3>
+          <div class="form-row two"><div><label>Page Access Token</label><input id="set_messenger_page_token" type="password" placeholder="اتركه فارغاً لاستخدام التوكن في .env"></div>
+          <div><label>معرف الصفحة (لرابط m.me)</label><input id="set_messenger_page_id" placeholder="رقم صفحة فيسبوك"></div></div>
+          <div class="row"><button class="btn btn-ghost btn-sm" id="testMessenger">🔍 تحقق من توكن مسنجر</button><span id="msTestResult" class="small muted"></span></div>
+          <p class="small muted">لتغيير الصفحة: أنشئ Page Token للصفحة الجديدة في Meta Developers، الصقه هنا واضغط حفظ — الردود تتحول فوراً. Webhook يجب أن يكون مشتركاً لتلك الصفحة.</p>
         </div>
         <div class="card" style="margin-top:18px;">
           <h3 class="card-title">💾 النسخة الاحتياطية</h3>

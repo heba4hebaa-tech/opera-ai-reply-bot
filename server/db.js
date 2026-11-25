@@ -82,17 +82,53 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
+CREATE TABLE IF NOT EXISTS customers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  phone TEXT NOT NULL UNIQUE,
+  name TEXT DEFAULT '',
+  city TEXT DEFAULT '',
+  address TEXT DEFAULT '',
+  latitude REAL DEFAULT 0,
+  longitude REAL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  phone TEXT NOT NULL,
+  code TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT ''
+);
 `);
+
+// إضافة الأعمدة الجديدة دون فقدان البيانات الموجودة
+function ensureColumn(table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+ensureColumn('products', 'colors_json', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('products', 'sizes_json', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('categories', 'has_options', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('categories', 'colors_json', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('categories', 'sizes_json', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('orders', 'customer_id', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('orders', 'latitude', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('orders', 'longitude', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('otp_codes', 'created_at', "TEXT NOT NULL DEFAULT ''");
 
 function now() { return new Date().toISOString(); }
 
 const defaults = {
   business_name: 'متجر أوبيرا',
-  currency: 'ر.س',
+  currency: 'د.ل',
+  country: 'ليبيا',
   whatsapp_number: '218945343522',
   wa_phone_number_id: '',
   wa_access_token: '',
   messenger_link: '',
+  messenger_page_token: '',
+  messenger_page_id: '',
   catalog_url: '',
   ai_enabled: '1',
   ai_model: config.GEMINI_MODEL,

@@ -3,17 +3,46 @@
   const $ = id => document.getElementById(id);
   const titles = {
     overview: 'نظرة عامة', categories: 'الأصناف', products: 'المنتجات', orders: 'الطلبات',
-    conversations: 'المحادثات', faqs: 'الأسئلة الشائعة', tester: 'اختبار الرد', settings: 'الإعدادات', security: 'كلمة المرور',
+    conversations: 'المحادثات', customers: 'الزبائن والتحقق', faqs: 'الأسئلة الشائعة', tester: 'اختبار الرد', settings: 'الإعدادات', security: 'كلمة المرور',
   };
   const state = { me: null, categories: [], products: [] };
   const statusClass = s => ({ 'جديد': 'warn', 'قيد التحضير': 'ok', 'تم الشحن': '', 'مكتمل': 'ok', 'ملغي': 'bad' }[s] || '');
+
+  const splitOpts = v => String(v || '').split(/[،,]/).map(x => x.trim()).filter(Boolean);
+  const parseOpts = v => { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } };
+
+  async function uploadFile(file) {
+    const res = await fetch('/api/admin/upload', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': file.type || 'image/png', 'X-File-Name': file.name },
+      body: file,
+    });
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.error || 'فشل الرفع');
+    return d.url;
+  }
+  function bindUpload(inputId, targetId, previewId) {
+    const input = $(inputId);
+    if (!input) return;
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+      toast('جارٍ رفع الصورة...');
+      try {
+        const url = await uploadFile(file);
+        $(targetId).value = url;
+        if ($(previewId)) $(previewId).innerHTML = `<img src="${url}" style="max-width:100%;max-height:110px;border-radius:10px;">`;
+        toast('تم الرفع ✓');
+      } catch (e) { toast(e.message, true); }
+    };
+  }
 
   async function boot() {
     const me = await api('/api/auth/me');
     if (!me.user) { location.href = '/login'; return; }
     state.me = me.user;
     wireNav();
-    await Promise.all([loadOverview(), loadCategories(), loadProducts(), loadOrders(), loadConversations(), loadFaqs(), loadSettings()]);
+    await Promise.all([loadOverview(), loadCategories(), loadProducts(), loadOrders(), loadConversations(), loadCustomers(), loadFaqs(), loadSettings()]);
   }
 
   function wireNav() {
@@ -35,6 +64,7 @@
       ['📦', 'المنتجات', d.stats.products, 'متاحة للبيع'],
       ['🗂️', 'الأصناف', d.stats.categories, 'تصنيفات المتجر'],
       ['💬', 'المحادثات', d.stats.conversations, d.stats.messages + ' رسالة'],
+      ['👥', 'الزبائن', d.stats.customers ?? 0, 'مسجّلون برقم الجوال'],
     ];
     $('statGrid').innerHTML = icons.map(i => `<div class="stat-card"><div class="ic">${i[0]}</div><div><div class="num">${i[2]}</div><div class="lbl">${i[1]}</div><div class="small muted">${i[3]}</div></div></div>`).join('');
     $('recentOrders').innerHTML = d.recentOrders.length ? d.recentOrders.map(o => `<div class="between" style="padding:8px 0;border-bottom:1px solid #f0f3f7;">
@@ -76,17 +106,25 @@
       <div class="form-row two"><div><label>الاسم بالعربية *</label><input name="name_ar" value="${esc(c.name_ar || '')}" required></div>
       <div><label>الاسم بالإنجليزية</label><input name="name_en" value="${esc(c.name_en || '')}"></div></div>
       <div class="form-row"><label>الوصف</label><input name="description" value="${esc(c.description || '')}"></div>
-      <div class="form-row two"><div><label>الرمز (إيموجي)</label><input name="icon" value="${esc(c.icon || '📦')}"></div>
-      <div><label>الترتيب</label><input name="sort_order" type="number" value="${c.sort_order || 0}"></div></div>
+      <div class="form-row two"><div><label>الرمز (إيموجي أو صورة)</label><input name="icon" id="catIcon" value="${esc(c.icon || '📦')}"></div>
+      <div><label>ارفع أيقونة من جهازك</label><input type="file" id="catIconFile" accept="image/*"><div id="catIconPreview" class="small" style="margin-top:6px;"></div></div></div>
+      <div class="form-row check"><input type="checkbox" name="has_options" ${c.has_options ? 'checked' : ''}><label>هذا الصنف له ألوان ومقاسات</label></div>
+      <div class="form-row two"><div><label>الألوان (افصل بفاصلة)</label><input name="colors_json" value="${esc(Array.isArray(c.colors_json) ? c.colors_json.join('، ') : (typeof c.colors_json === 'string' ? c.colors_json.replace(/[\[\]"]/g, '') : ''))}" placeholder="أحمر، أزرق، أسود"></div>
+      <div><label>المقاسات (افصل بفاصلة)</label><input name="sizes_json" value="${esc(Array.isArray(c.sizes_json) ? c.sizes_json.join('، ') : (typeof c.sizes_json === 'string' ? c.sizes_json.replace(/[\[\]"]/g, '') : ''))}" placeholder="S، M، L، XL"></div></div>
+      <div class="form-row two"><div><label>الترتيب</label><input name="sort_order" type="number" value="${c.sort_order || 0}"></div></div>
       <div class="form-row check"><input type="checkbox" name="active" ${c.active === 0 ? '' : 'checked'}><label>ظاهر للزبائن</label></div>
       <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary">حفظ</button></div>
     </form>`);
+    bindUpload('catIconFile', 'catIcon', 'catIconPreview');
     m.el.querySelector('#catForm').addEventListener('submit', async e => {
       e.preventDefault();
       const f = new FormData(e.target);
       const payload = {
         name_ar: f.get('name_ar'), name_en: f.get('name_en'), description: f.get('description'),
         icon: f.get('icon'), sort_order: Number(f.get('sort_order')), active: f.get('active') === 'on',
+        has_options: f.get('has_options') === 'on',
+        colors_json: JSON.stringify(splitOpts(f.get('colors_json'))),
+        sizes_json: JSON.stringify(splitOpts(f.get('sizes_json'))),
       };
       const r = await api(c.id ? '/api/admin/categories/' + c.id : '/api/admin/categories', { method: c.id ? 'PUT' : 'POST', body: payload });
       if (r.error) { toast(r.error, true); return; }
@@ -120,14 +158,20 @@
       <div><label>الاسم بالإنجليزية</label><input name="name_en" value="${esc(p.name_en || '')}"></div></div>
       <div class="form-row"><label>الوصف</label><textarea name="description" style="min-height:70px;">${esc(p.description || '')}</textarea></div>
       <div class="form-row two"><div><label>الصنف</label><select name="category_id"><option value="0">عام</option>${options}</select></div>
-      <div><label>الرمز (إيموجي)</label><input name="icon" value="${esc(p.icon || '🛍️')}"></div></div>
+      <div><label>الرمز (إيموجي أو صورة)</label><input name="icon" id="prodIcon" value="${esc(p.icon || '🛍️')}"></div></div>
+      <div class="form-row two"><div><label>ارفع صورة المنتج من جهازك</label><input type="file" id="prodImageFile" accept="image/*"><div id="prodImagePreview" class="small" style="margin-top:6px;">${p.image_url ? `<img src="${esc(p.image_url)}" style="max-width:100%;max-height:110px;border-radius:10px;">` : ''}</div></div>
+      <div><label>أو ارفع أيقونة</label><input type="file" id="prodIconFile" accept="image/*"><div id="prodIconPreview" class="small" style="margin-top:6px;"></div></div></div>
+      <div class="form-row"><label>رابط الصورة (يُملأ تلقائياً عند الرفع)</label><input name="image_url" id="prodImageUrl" value="${esc(p.image_url || '')}" placeholder="/uploads/..."></div>
       <div class="form-row two"><div><label>السعر</label><input name="price" type="number" step="0.01" value="${p.price || 0}"></div>
       <div><label>السعر قبل الخصم</label><input name="old_price" type="number" step="0.01" value="${p.old_price || 0}"></div></div>
       <div class="form-row two"><div><label>المخزون</label><input name="stock" type="number" value="${p.stock || 0}"></div>
-      <div><label>رابط الصورة (اختياري)</label><input name="image_url" value="${esc(p.image_url || '')}" placeholder="https://..."></div></div>
+      <div><label>ألوان هذا المنتج (فارغ = من الصنف)</label><input name="colors_json" value="${esc(parseOpts(p.colors_json).join('، '))}" placeholder="أحمر، أزرق"></div></div>
+      <div class="form-row two"><div><label>مقاسات هذا المنتج (فارغ = من الصنف)</label><input name="sizes_json" value="${esc(parseOpts(p.sizes_json).join('، '))}" placeholder="S، M، L"></div></div>
       <div class="form-row check"><input type="checkbox" name="active" ${p.active === 0 ? '' : 'checked'}><label>ظاهر للزبائن</label></div>
       <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary">حفظ</button></div>
     </form>`, { wide: true });
+    bindUpload('prodImageFile', 'prodImageUrl', 'prodImagePreview');
+    bindUpload('prodIconFile', 'prodIcon', 'prodIconPreview');
     m.el.querySelector('#prodForm').addEventListener('submit', async e => {
       e.preventDefault();
       const f = new FormData(e.target);
@@ -135,6 +179,8 @@
         name_ar: f.get('name_ar'), name_en: f.get('name_en'), description: f.get('description'),
         category_id: Number(f.get('category_id')) || null, icon: f.get('icon'), price: Number(f.get('price')),
         old_price: Number(f.get('old_price')), stock: Number(f.get('stock')), image_url: f.get('image_url'),
+        colors_json: JSON.stringify(splitOpts(f.get('colors_json'))),
+        sizes_json: JSON.stringify(splitOpts(f.get('sizes_json'))),
         active: f.get('active') === 'on',
       };
       const r = await api(p.id ? '/api/admin/products/' + p.id : '/api/admin/products', { method: p.id ? 'PUT' : 'POST', body: payload });
@@ -186,6 +232,19 @@
     </div>`, { wide: true });
   }
 
+  async function loadCustomers() {
+    const [c, o] = await Promise.all([api('/api/admin/customers'), api('/api/admin/otps')]);
+    $('customerRows').innerHTML = c.items.length ? c.items.map(x => `<tr>
+      <td>${x.id}</td><td class="small" dir="ltr">${esc(x.phone)}</td><td><b>${esc(x.name || '—')}</b></td>
+      <td class="small">${esc(x.city || '—')}</td>
+      <td class="small muted">${x.latitude ? `${Number(x.latitude).toFixed(4)}, ${Number(x.longitude).toFixed(4)}` : '—'}</td>
+    </tr>`).join('') : `<tr><td colspan="5" class="empty">لا يوجد زبائن بعد</td></tr>`;
+    $('otpRows').innerHTML = o.items.length ? o.items.map(x => `<tr>
+      <td dir="ltr" class="small">${esc(x.phone)}</td><td><b>${esc(x.code)}</b></td>
+      <td><span class="pill ${x.used ? '' : 'warn'}">${x.used ? 'مستخدم' : 'ساري حتى ' + fmtDate(new Date(x.expires_at).toISOString())}</span></td>
+    </tr>`).join('') : `<tr><td colspan="3" class="empty">لا توجد رموز بعد</td></tr>`;
+  }
+
   async function loadFaqs() {
     const d = await api('/api/admin/faqs');
     $('faqRows').innerHTML = d.items.length ? d.items.map(f => `<tr>
@@ -234,7 +293,7 @@
   }
 
   $('saveSettings').onclick = async () => {
-    const keys = ['business_name', 'currency', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+    const keys = ['business_name', 'currency', 'country', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
     const payload = {};
     for (const k of keys) {
       const el = $('set_' + k);
@@ -250,6 +309,13 @@
     const r = await api('/api/admin/test-whatsapp', { method: 'POST', body: {} });
     if (r.ok) out.textContent = `✅ ${r.displayPhone || r.phoneId} ${r.verifiedName ? '· ' + r.verifiedName : ''}`;
     else out.textContent = '❌ ' + (r.error || 'تعذر التحقق');
+  };
+
+  $('testMessenger').onclick = async () => {
+    const out = $('msTestResult');
+    out.textContent = 'جارٍ التحقق...';
+    const r = await api('/api/admin/test-messenger', { method: 'POST', body: {} });
+    out.textContent = r.ok ? `✅ صفحة ${r.pageId || ''} (${r.type})` : '❌ ' + (r.error || 'تعذر التحقق');
   };
 
   $('backupBtn').onclick = async () => {
