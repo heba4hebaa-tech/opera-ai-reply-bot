@@ -38,6 +38,8 @@ module.exports = {
   MESSENGER_PAGE_TOKEN: env.MESSENGER_PAGE_TOKEN || '',
   FACEBOOK_PAGE_ID: env.FACEBOOK_PAGE_ID || '',
   FACEBOOK_PAGE_TOKEN: env.FACEBOOK_PAGE_TOKEN || '',
+  FACEBOOK_APP_ID: env.FACEBOOK_APP_ID || '',
+  FACEBOOK_APP_SECRET: env.FACEBOOK_APP_SECRET || '',
   GEMINI_API_KEY: env.GEMINI_API_KEY || '',
   GEMINI_MODEL: env.GEMINI_MODEL || 'gemini-2.5-flash',
   DB_PATH: path.join(ROOT, 'data', 'app.db'),

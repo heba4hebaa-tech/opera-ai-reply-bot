@@ -1,6 +1,7 @@
 'use strict';
 const config = require('../config');
-const { getSettings } = require('../db');
+const { getSettings, setSetting } = require('../db');
+const { refreshWAToken } = require('./wa');
 
 function credentials() {
   const s = getSettings();
@@ -12,14 +13,19 @@ function credentials() {
 
 async function sendWhatsApp(to, text) {
   const { token, phoneId } = credentials();
-  if (!token || !phoneId) {
-    return { ok: false, skipped: true, error: 'واتساب غير مُعدّ — أضف Phone Number ID والتوكن من الإعدادات' };
+  if (!phoneId) {
+    return { ok: false, skipped: true, error: 'واتساب غير مُعدّ — أضف Phone Number ID' };
+  }
+  let useToken = token;
+  try { if (!useToken) useToken = await refreshWAToken(); } catch {}
+  if (!useToken) {
+    return { ok: false, error: 'توكن واتساب مفقود أو منتهي — استخدم API Explorer أو قدم System User Token في الإعدادات' };
   }
   try {
     const url = `https://graph.facebook.com/${config.GRAPH_API_VERSION}/${phoneId}/messages`;
     const res = await fetch(url, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${useToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
         to,

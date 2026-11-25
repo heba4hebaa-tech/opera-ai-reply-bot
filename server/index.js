@@ -445,6 +445,31 @@ add('POST', '/api/admin/test-messenger', async () => {
   } catch (e) { return { status: 400, body: { error: e.message } }; }
 }, { auth: true });
 
+add('GET', '/api/admin/page-status', () => ({
+  s: (() => { const x = getSettings(); return { pageId: x.facebook_page_id || config.FACEBOOK_PAGE_ID, name: '', token: !!(x.facebook_page_token || config.FACEBOOK_PAGE_TOKEN) }; })(),
+}), { auth: true });
+
+add('POST', '/api/admin/change-page', async ({ body }) => {
+  const token = str(body.token);
+  if (!token) return { status: 400, body: { error: 'التوكن مطلوب' } };
+  try {
+    const page = await fbGraph(`${str(body.page_id) || config.FACEBOOK_PAGE_ID || ''}`, {}, 'GET', token)
+      .catch(async () => {
+        const t = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(token)}`).then(r => r.json());
+        const exp = t.data?.exp;
+        if (!exp) return { id: str(body.page_id), name: '' };
+        return fbGraph(str(body.page_id), {}, 'GET', token);
+      });
+    if (str(body.page_id) || config.FACEBOOK_PAGE_ID) setSetting('facebook_page_id', str(body.page_id) || config.FACEBOOK_PAGE_ID || '');
+    setSetting('facebook_page_token', token);
+    setSetting('messenger_page_token', token); // واجهة واحدة للأطراف
+    setSetting('messenger_page_id', str(body.page_id) || page?.id || '');
+    return { ok: true, pageId: str(body.page_id) || page?.id || '', name: page?.name || '' };
+  } catch (e) {
+    return { status: 400, body: { error: e.message } };
+  }
+}, { auth: true });
+
 add('POST', '/api/admin/test-facebook', async () => {
   try {
     const { pageId } = fbCreds();
