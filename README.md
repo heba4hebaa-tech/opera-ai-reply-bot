@@ -154,6 +154,16 @@ ai-reply/
 
 > الصور المرفوعة تُحفظ في `public/uploads/`؛ على Render المجاني تُحذف عند إعادة النشر — استخدم زر النسخة الاحتياطية قبل التحديث إذا احتجت صوراً دائمة (أو ارفعها لتخزين خارجي لاحقاً).
 
+### 🔗 ربط صفحة فيسبوك + التعليقات
+- **نشر تلقائي على خط الصفحة**: أضف **ID الصفحة** + **Page Access Token** في الأدمن ← الإعدادات ← «صفحة فيسبوك»، ثم اكتب المحتوى في حقل «المحتوى للنشر» واضغط «📢 نشر بصفحة فيسبوك».
+- **رد تلقائي على تعليقات الصفحة**: يجب إنشاء Webhook على Meta بـ object `feed` (Feed Comment Addition) + الاشتراك على `feed`. السيرفر يقرأ التعليقات ويردّ عليها عبر `replyComment` فوراً باستخدام مفتاح الصفحة.
+- **تنبيه الزبون عند إتمام الطلب**: لكل طلب في الأدمن يمكن إرسال إشعار تلقائي على مسنجر أو واتساب (POST `/api/admin/orders/:id/notify`).
+
+### 📣 خطوات بسيطة لربط صفحة فيسبوك
+1. أضف صفحة فيسبوك للمتجر، ثم أضف `Page Access Token` (إعدادات ← التطبيق ← معاملات OAuth ← إنشاء رمز).
+2. ضعه في `facebook_page_token` + اكتب `facebook_page_id` في الأدمن ← الإعدادات، واختبر.
+3. في Meta App Dashboard → Webhooks → اختر الصفحة واشترك في `feed` (Feed Comment Addition) مع Callback URL `https://opera-ai-reply-bot.onrender.com/webhooks/facebook`.
+
 ### الروابط المضبوطة حالياً
 - واتساب Webhook: `https://opera-ai-reply-bot.onrender.com/webhooks/whatsapp` (مشترك في `messages`)
 - مسنجر Webhook: `https://opera-ai-reply-bot.onrender.com/webhooks/messenger` (مشترك في `messages`)
