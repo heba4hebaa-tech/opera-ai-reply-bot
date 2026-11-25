@@ -1,0 +1,14 @@
+{
+  "name": "opera-ai-reply",
+  "version": "1.0.0",
+  "private": true,
+  "description": "تطبيق رد تلقائي ذكي للواتساب والمسنجر مع لوحة أدمن ومتجر للزبائن - مجاني بالكامل",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node --no-warnings server/index.js",
+    "dev": "node --no-warnings server/index.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

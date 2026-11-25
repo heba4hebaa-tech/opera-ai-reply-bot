@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>متجرنا | تسوّق وتكلّم معنا</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-brand"><div class="logo">🤖</div><span id="brandName">متجر أوبيرا</span></div>
+    <nav class="site-nav">
+      <a href="#home">الرئيسية</a>
+      <a href="#products">المنتجات</a>
+      <a href="#contact">تواصل معنا</a>
+      <a href="/admin">الأدمن</a>
+    </nav>
+    <button class="btn btn-outline btn-sm cart-btn" id="cartBtn">🛒 السلة <span class="cart-count" id="cartCount">0</span></button>
+  </header>
+
+  <section class="hero" id="home">
+    <div class="hero-inner">
+      <span class="tag">✨ تسوّق ذكي · رد فوري على مدار الساعة</span>
+      <h1>كل ما تحتاجه، <span>بضغطة زر</span></h1>
+      <p id="heroText">تصفّح منتجاتنا، أضف ما يعجبك للسلة، واطلب خلال ثوانٍ. ولديك أي سؤال؟ مساعدنا الذكي جاهز للرد عليك فوراً على واتساب ومسنجر.</p>
+      <div class="hero-actions">
+        <a href="#products" class="btn btn-gold">تصفّح المنتجات ←</a>
+        <button class="btn btn-outline" id="heroChat" style="color:#fff;border-color:rgba(255,255,255,.5)">💬 تكلّم معنا</button>
+      </div>
+      <div class="trust">
+        <span>⚡ رد فوري</span><span>🤖 مساعد ذكي</span><span>🚚 توصيل سريع</span><span>🔒 طلب آمن</span>
+      </div>
+    </div>
+  </section>
+
+  <main class="store-body">
+    <div class="card" style="padding:14px 18px;background:linear-gradient(135deg,#eaf7f4,#f3f8ff);border:1px solid #dceee9;">
+      <div class="row wrap" style="justify-content:space-between;">
+        <div class="row"><span style="font-size:22px;">💬</span><div><b>أسئلتك؟ مساعدنا يرد عليك فوراً</b><div class="small muted">واتساب ومسنجر — على مدار الساعة</div></div></div>
+        <button class="btn btn-primary btn-sm" id="assistantBtn">جرّب المساعد</button>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <div><h2>منتجاتنا</h2><p>اختر ما يناسبك وأضفه للسلة</p></div>
+      <span class="pill" id="productCount">0 منتج</span>
+    </div>
+    <div class="chips" id="categoryChips"></div>
+    <div class="product-grid" id="productGrid">
+      <div class="empty" style="grid-column:1/-1;">جارٍ تحميل المنتجات...</div>
+    </div>
+  </main>
+
+  <footer class="site-footer" id="contact">
+    <div id="footerText">نرحب بطلباتكم على مدار الساعة 🤍</div>
+    <div class="row" style="justify-content:center;margin-top:10px;gap:16px;">
+      <a id="waLink" href="#" class="small">📱 واتساب</a>
+      <a id="msLink" href="#" class="small">💬 مسنجر</a>
+      <a href="/admin" class="small">🔐 الأدمن</a>
+    </div>
+  </footer>
+
+  <a id="fab" class="fab" href="#" title="راسلنا على واتساب">💬</a>
+
+  <div id="drawerOverlay" class="drawer-overlay hidden"></div>
+  <aside id="cartDrawer" class="drawer hidden">
+    <div class="drawer-head"><h3 style="margin:0;">🛒 سلة المشتريات</h3><button class="icon-btn" id="closeCart">✕</button></div>
+    <div class="drawer-body" id="cartItems"></div>
+    <div class="drawer-foot">
+      <div class="between" style="margin-bottom:12px;"><b>الإجمالي</b><b id="cartTotal" style="color:var(--teal-dark);font-size:19px;">0</b></div>
+      <button class="btn btn-primary" id="checkoutBtn" style="width:100%;">إتمام الطلب</button>
+    </div>
+  </aside>
+
+  <div id="modalRoot"></div>
+  <div id="toast"></div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/store.js"></script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>لوحة التحكم | الرد الذكي</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="admin-shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">🤖</div><span>الرد الذكي</span></div>
+    <button class="nav-item active" data-section="overview"><span class="ico">📊</span><span>نظرة عامة</span></button>
+    <button class="nav-item" data-section="categories"><span class="ico">🗂️</span><span>الأصناف</span></button>
+    <button class="nav-item" data-section="products"><span class="ico">📦</span><span>المنتجات</span></button>
+    <button class="nav-item" data-section="orders"><span class="ico">🧾</span><span>الطلبات</span></button>
+    <button class="nav-item" data-section="conversations"><span class="ico">💬</span><span>المحادثات</span></button>
+    <button class="nav-item" data-section="faqs"><span class="ico">❓</span><span>الأسئلة الشائعة</span></button>
+    <div class="nav-sep"></div>
+    <button class="nav-item" data-section="tester"><span class="ico">🧪</span><span>اختبار الرد</span></button>
+    <button class="nav-item" data-section="settings"><span class="ico">⚙️</span><span>الإعدادات</span></button>
+    <button class="nav-item" data-section="security"><span class="ico">🔐</span><span>كلمة المرور</span></button>
+    <div class="nav-sep"></div>
+    <a class="nav-item" href="/"><span class="ico">🛍️</span><span>عرض المتجر</span></a>
+    <button class="nav-item" id="logoutBtn"><span class="ico">🚪</span><span>تسجيل الخروج</span></button>
+  </aside>
+
+  <div class="admin-main">
+    <header class="topbar">
+      <h1 id="topTitle">نظرة عامة</h1>
+      <div class="row wrap" id="topBadges">
+        <span class="config-badge" id="badgeAI"><span class="dot"></span> الذكاء الاصطناعي</span>
+        <span class="config-badge" id="badgeWA"><span class="dot"></span> واتساب</span>
+        <span class="config-badge" id="badgeMS"><span class="dot"></span> مسنجر</span>
+      </div>
+    </header>
+
+    <main class="admin-content">
+      <!-- overview -->
+      <section class="section active" id="sec-overview">
+        <div class="section-head"><div><h2>مرحباً بك 👋</h2><p class="muted small">ملخص سريع عن متجرك ومساعدك الذكي</p></div></div>
+        <div class="grid grid-4" style="margin-bottom:18px;" id="statGrid"></div>
+        <div class="grid grid-2">
+          <div class="card">
+            <h3 class="card-title">🧾 آخر الطلبات</h3>
+            <div id="recentOrders"></div>
+          </div>
+          <div class="card">
+            <h3 class="card-title">💬 آخر المحادثات</h3>
+            <div id="recentChats"></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:18px;">
+          <h3 class="card-title">🔌 حالة الربط</h3>
+          <div class="grid grid-3" id="configInfo"></div>
+          <p class="small muted" style="margin:14px 0 0;">لتفعيل الربط: عدّل ملف <code>.env</code> ثم أعد تشغيل التطبيق. راجع ملف README.md للخطوات.</p>
+        </div>
+      </section>
+
+      <!-- categories -->
+      <section class="section" id="sec-categories">
+        <div class="section-head"><div><h2>الأصناف</h2><p class="muted small">نظّم منتجاتك في أصناف</p></div><button class="btn btn-primary" id="addCategory">+ صنف جديد</button></div>
+        <div class="card"><div class="table-wrap"><table><thead><tr><th>الترتيب</th><th>الاسم</th><th>الوصف</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="categoryRows"></tbody></table></div></div>
+      </section>
+
+      <!-- products -->
+      <section class="section" id="sec-products">
+        <div class="section-head"><div><h2>المنتجات</h2><p class="muted small">أضف منتجاتك وأسعارها — تظهر فوراً للزبائن وللمساعد الذكي</p></div><button class="btn btn-primary" id="addProduct">+ منتج جديد</button></div>
+        <div class="card"><div class="table-wrap"><table><thead><tr><th>المنتج</th><th>الصنف</th><th>السعر</th><th>المخزون</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="productRows"></tbody></table></div></div>
+      </section>
+
+      <!-- orders -->
+      <section class="section" id="sec-orders">
+        <div class="section-head"><div><h2>الطلبات</h2><p class="muted small">تابع طلبات الزبائن وحدّث حالتها</p></div>
+          <select id="orderFilter" style="width:auto;"><option value="">كل الحالات</option><option>جديد</option><option>قيد التحضير</option><option>تم الشحن</option><option>مكتمل</option><option>ملغي</option></select>
+        </div>
+        <div class="card"><div class="table-wrap"><table><thead><tr><th>#</th><th>الزبون</th><th>الجوال</th><th>المحتوى</th><th>الإجمالي</th><th>المصدر</th><th>الحالة</th><th></th></tr></thead><tbody id="orderRows"></tbody></table></div></div>
+      </section>
+
+      <!-- conversations -->
+      <section class="section" id="sec-conversations">
+        <div class="section-head"><div><h2>المحادثات</h2><p class="muted small">كل الرسائل الواردة والردود الذكية</p></div></div>
+        <div class="card"><div class="table-wrap"><table><thead><tr><th>المنصة</th><th>الاسم / المعرّف</th><th>آخر رسالة</th><th>عدد الرسائل</th><th>آخر تحديث</th><th></th></tr></thead><tbody id="conversationRows"></tbody></table></div></div>
+      </section>
+
+      <!-- faqs -->
+      <section class="section" id="sec-faqs">
+        <div class="section-head"><div><h2>الأسئلة الشائعة</h2><p class="muted small">قاعدة المعرفة التي يستخدمها المساعد الذكي في إجاباته</p></div><button class="btn btn-primary" id="addFaq">+ سؤال جديد</button></div>
+        <div class="card"><div class="table-wrap"><table><thead><tr><th>السؤال</th><th>الجواب</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="faqRows"></tbody></table></div></div>
+      </section>
+
+      <!-- tester -->
+      <section class="section" id="sec-tester">
+        <div class="section-head"><div><h2>اختبار الرد الذكي</h2><p class="muted small">جرّب كيف سيرد المساعد على زبونك قبل استقبال الرسائل الحقيقية</p></div></div>
+        <div class="grid grid-2">
+          <div class="card">
+            <h3 class="card-title">اكتب رسالة الزبون</h3>
+            <textarea id="testInput" placeholder="مثال: كم سعر المنتج التجريبي؟" style="min-height:130px;"></textarea>
+            <div class="row wrap" style="margin-top:10px;" id="quickTests">
+              <button class="chip" data-msg="مرحباً">مرحباً</button>
+              <button class="chip" data-msg="المنتجات">المنتجات</button>
+              <button class="chip" data-msg="كم السعر؟">كم السعر؟</button>
+              <button class="chip" data-msg="أريد الطلب">أريد الطلب</button>
+              <button class="chip" data-msg="متى التوصيل؟">متى التوصيل؟</button>
+            </div>
+            <button class="btn btn-primary" id="testBtn" style="margin-top:14px;">إرسال للاختبار</button>
+          </div>
+          <div class="card">
+            <h3 class="card-title">رد المساعد 🤖</h3>
+            <div id="testResult" class="chat-box" style="min-height:180px;"><div class="empty">اكتب رسالة واضغط اختبار لترى الرد</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- settings -->
+      <section class="section" id="sec-settings">
+        <div class="section-head"><div><h2>الإعدادات</h2><p class="muted small">تخصيص المتجر والمساعد الذكي</p></div><button class="btn btn-primary" id="saveSettings">حفظ الإعدادات</button></div>
+        <div class="grid grid-2">
+          <div class="card">
+            <h3 class="card-title">🏪 بيانات المتجر</h3>
+            <div class="form-row"><label>اسم المتجر</label><input id="set_business_name"></div>
+            <div class="form-row two"><div><label>العملة</label><input id="set_currency"></div><div><label>رقم واتساب (مع الدولة)</label><input id="set_whatsapp_number" placeholder="9665xxxxxxxx"></div></div>
+            <div class="form-row"><label>رابط الكتالوج (اختياري)</label><input id="set_catalog_url" placeholder="https://..."></div>
+            <div class="form-row"><label>رابط صفحة مسنجر (اختياري)</label><input id="set_messenger_link" placeholder="https://m.me/..."></div>
+            <div class="form-row"><label>رسالة الذيل في المتجر</label><input id="set_footer_text"></div>
+          </div>
+          <div class="card">
+            <h3 class="card-title">🤖 المساعد الذكي</h3>
+            <div class="form-row"><label class="check"><input type="checkbox" id="set_ai_enabled"> تفعيل الرد الذكي (عند إيقافه يُستخدم الرد الأساسي)</label></div>
+            <div class="form-row"><label>نبرة الرد</label><select id="set_bot_tone"><option>ودود ومختصر</option><option>رسمي ومهني</option><option>حماسي ومرح</option></select></div>
+            <div class="form-row"><label>رسالة الترحيب</label><textarea id="set_greeting"></textarea></div>
+            <div class="small muted">مفتاح Gemini والمنصات تُضبط من ملف <code>.env</code>. الحالة الحالية: <span id="runtimeInfo"></span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- security -->
+      <section class="section" id="sec-security">
+        <div class="section-head"><div><h2>تغيير كلمة المرور</h2><p class="muted small">حدّث كلمة دخول لوحة التحكم</p></div></div>
+        <div class="card" style="max-width:520px;">
+          <div class="form-row"><label>اسم المستخدم</label><input id="sec_username" value="admin"></div>
+          <div class="form-row"><label>كلمة المرور الحالية</label><input id="sec_old" type="password"></div>
+          <div class="form-row"><label>كلمة المرور الجديدة</label><input id="sec_new" type="password"></div>
+          <button class="btn btn-primary" id="savePassword">تحديث كلمة المرور</button>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toast"></div>
+<script src="/js/common.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>

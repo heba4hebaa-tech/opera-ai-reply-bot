@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: opera-ai-reply
+    runtime: node
+    plan: free
+    buildCommand: ""
+    startCommand: node --no-warnings server/index.js
+    envVars:
+      - key: GRAPH_API_VERSION
+        value: v21.0
+      - key: VERIFY_TOKEN
+        value: opera-ai-verify-token
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: SESSION_SECRET
+        generateValue: true
