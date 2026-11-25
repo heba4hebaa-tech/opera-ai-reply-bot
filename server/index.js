@@ -355,6 +355,7 @@ add('DELETE', '/api/admin/orders/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
+add('GET', '/api/admin/webhook-events', () => ({ items: all('SELECT id, platform, payload, created_at FROM webhook_events ORDER BY id DESC LIMIT 20') }), { auth: true });
 add('GET', '/api/admin/otps', () => ({
   items: all('SELECT phone, code, expires_at, used, created_at FROM otp_codes ORDER BY id DESC LIMIT 20'),
 }), { auth: true });
@@ -547,6 +548,7 @@ function webhookVerify({ query, res }) {
 add('GET', '/webhooks/whatsapp', webhookVerify);
 add('POST', '/webhooks/whatsapp', ({ req, raw, body, res }) => {
   if (!verifyWebhookSignature(req, raw)) return text(res, 401, 'Invalid signature');
+  run('INSERT INTO webhook_events (platform, payload, created_at) VALUES (?,?,?)', 'meta', JSON.stringify(body).slice(0, 20000), now());
   const jobs = [];
   for (const entry of body.entry || []) {
     for (const change of entry.changes || []) {
@@ -572,6 +574,7 @@ add('GET', '/webhooks/messenger', webhookVerify);
 add('GET', '/webhooks/facebook', webhookVerify);
 add('POST', '/webhooks/facebook', async ({ req, raw, body, res }) => {
   if (!verifyWebhookSignature(req, raw)) return text(res, 401, 'Invalid signature');
+  run('INSERT INTO webhook_events (platform, payload, created_at) VALUES (?,?,?)', 'meta', JSON.stringify(body).slice(0, 20000), now());
   const jobs = [];
   for (const entry of body.entry || []) {
     for (const change of entry.changes || []) {
@@ -632,6 +635,7 @@ add('POST', '/api/admin/simulate/facebook', async ({ body }) => {
 
 add('POST', '/webhooks/messenger', ({ req, raw, body, res }) => {
   if (!verifyWebhookSignature(req, raw)) return text(res, 401, 'Invalid signature');
+  run('INSERT INTO webhook_events (platform, payload, created_at) VALUES (?,?,?)', 'meta', JSON.stringify(body).slice(0, 20000), now());
   const jobs = [];
   for (const entry of body.entry || []) {
     for (const ev of entry.messaging || []) {

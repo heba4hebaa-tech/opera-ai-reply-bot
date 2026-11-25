@@ -119,6 +119,7 @@ ensureColumn('orders', 'latitude', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'longitude', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'notified_messenger', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('orders', 'notified_whatsapp', 'INTEGER NOT NULL DEFAULT 0');
+CREATE TABLE IF NOT EXISTS webhook_events (id INTEGER PRIMARY KEY AUTOINCREMENT, platform TEXT, payload TEXT, created_at TEXT NOT NULL);
 ensureColumn('customers', 'email', 'TEXT');
 ensureColumn('customers', 'verified', 'INTEGER NOT NULL DEFAULT 0');
 db.exec('CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);');
