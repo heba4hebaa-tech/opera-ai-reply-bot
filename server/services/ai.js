@@ -112,7 +112,7 @@ function ruleReply(message) {
   if (/شكر|thank|تمم/.test(m)) return `العفو 🤍 ${s.footer_text || 'يسعدنا خدمتك'}`;
   if (/كتالوج|منتجات|المنتجات|الاصناف|catalog|ماذا تبيع|ماذا تبيعون/.test(m)) return catalogText();
   if (/سعر|الاسعار|كم|price|بكم/.test(m)) {
-    const products = require('../db').all('SELECT name_ar, price, description, image_url, icon, colors_json, sizes_json FROM products WHERE active=1 ORDER BY id DESC');
+    const products = require('../db').all('SELECT id, name_ar, price, description, image_url, icon, colors_json, sizes_json FROM products WHERE active=1 ORDER BY id DESC');
     const matched = products.find(p => {
       if (!p.name_ar) return false;
       const words = require('./ai').stripTashkeel(p.name_ar).split(/\s+/).filter(w => w.length >= 3);
@@ -126,6 +126,9 @@ function ruleReply(message) {
       const sizes = (() => { try { return JSON.parse(matched.sizes_json || '[]'); } catch { return []; } })();
       if (colors.length) out += `\nالألوان: ${colors.join('، ')}`;
       if (sizes.length) out += `\nالمقاسات: ${sizes.join('، ')}`;
+      const same = products.filter(p => p.id !== matched.id && Math.abs(p.price - matched.price) < matched.price * 0.6).slice(0, 2);
+      if (same.length) out += `\nقد يعجبك أيضاً: ${same.map(p => `${p.name_ar} (${Number(p.price).toLocaleString('ar-SA')} ${s.currency || ''})`).join(' · ')}`;
+      out += '\nتقدر تخصّص اللون والمقاس وأجهّز طلبك فوراً 🛍️';
       return out;
     }
     return `لم أجد منتجاً بهذا الاسم في الكتالوج حالياً. ${s.catalog_url ? `تصفّح الكتالوج: ${s.catalog_url}` : 'اكتب «المنتجات» لعرض الكتالوج.'}`;
