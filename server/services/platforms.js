@@ -11,7 +11,7 @@ function credentials() {
   };
 }
 
-async function sendWhatsApp(to, text) {
+async function sendWhatsApp(to, text, _retried = false) {
   const { token, phoneId } = credentials();
   if (!phoneId) {
     return { ok: false, skipped: true, error: 'واتساب غير مُعدّ — أضف Phone Number ID' };
@@ -36,6 +36,12 @@ async function sendWhatsApp(to, text) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      // توكن منتهي/غير صالح (190) — حاول تجديده مرة واحدة عبر app_secret ثم أعد الإرسال
+      const code = data?.error?.code;
+      if (!_retried && (code === 190 || res.status === 401)) {
+        const fresh = await refreshWAToken().catch(() => null);
+        if (fresh && fresh !== useToken) return sendWhatsApp(to, text, true);
+      }
       console.error('[WhatsApp] send failed:', res.status, JSON.stringify(data).slice(0, 400));
       return { ok: false, error: data?.error?.message || `HTTP ${res.status}` };
     }
