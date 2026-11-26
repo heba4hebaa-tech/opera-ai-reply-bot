@@ -284,7 +284,7 @@
   function loginModal(after) {
     const m = modal('دخول الزبون 👤', `<div id="loginEmail">
       <p class="small muted">سجّل برقم الجوال — سنرسل لك رمز تحقق من ٦ أرقام (وضع تجربة هنا).</p>
-      <div class="form-row"><label>رقم الجوال</label><input id="loginPhone" dir="ltr" placeholder="2189xxxxxxxx"></div>
+      <div class="form-row"><label>رقم الجوال</label><input id="loginPhone" dir="ltr" placeholder="0945343522 أو 218945343522"></div>
       <button class="btn btn-primary" id="sendCode">إرسال الرمز</button></div>
       <div id="loginStep2" class="hidden">
       <div class="form-row"><label>رمز التحقق</label><input id="loginCode" dir="ltr" maxlength="6" placeholder="000000"></div>
