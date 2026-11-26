@@ -588,12 +588,13 @@ add('POST', '/api/admin/test-whatsapp', async () => {
 
 add('POST', '/api/admin/test-messenger', async () => {
   const s = getSettings();
+  const source = s.messenger_page_token ? 'settings' : (config.MESSENGER_PAGE_TOKEN ? 'env' : (s.facebook_page_token ? 'settings-facebook' : 'none'));
   const token = s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token;
-  if (!token) return { status: 400, body: { error: 'أضف Page Token أولاً من إعدادات المسنجر' } };
+  if (!token) return { status: 400, body: { error: 'أضف Page Token أولاً من إعدادات المسنجر', source } };
   try {
     // تحقق من التوكن
     const dbg = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(15000) }).then(r => r.json());
-    if (!dbg.data?.is_valid) return { status: 400, body: { error: dbg.error?.message || dbg.data?.error?.message || 'التوكن غير صالح أو منتهي' } };
+    if (!dbg.data?.is_valid) return { status: 400, body: { error: dbg.error?.message || dbg.data?.error?.message || 'التوكن غير صالح أو منتهي', source, preview: token.slice(0, 8), debug: dbg } };
     const pageId = dbg.data.profile_id || s.messenger_page_id || s.facebook_page_id || '';
     // جلب معلومات الصفحة
     let page = {};
@@ -786,6 +787,8 @@ add('GET', '/api/admin/system-status', () => {
     services: {
       database: st >= 0,
       messengerToken: !!(s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token),
+      tokenSource: s.messenger_page_token ? 'settings' : (config.MESSENGER_PAGE_TOKEN ? 'env' : (s.facebook_page_token ? 'settings-facebook' : 'none')),
+      tokenPreview: String(s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token || '').slice(0, 8),
       pageId: s.messenger_page_id || s.facebook_page_id || '',
       whatsapp: !!(s.wa_access_token || config.WA_ACCESS_TOKEN),
       whatsappNumber: s.whatsapp_number || '',

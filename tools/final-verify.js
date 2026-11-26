@@ -31,5 +31,22 @@ const check = (name, ok, d = '') => { results.push(ok); console.log(`${ok ? '✅
   check('poller running', ps.enabled === true && ps.errors === 0, `runs=${ps.runs} errors=${ps.errors}`);
   const b = await fetch(`${BASE}/api/admin/backup`, { headers: H }).then(r => r.json());
   check('backup endpoint', Array.isArray(b.categories) && Array.isArray(b.products), Object.keys(b).slice(0, 6).join(','));
+  const hh = await fetch(`${BASE}/api/health`);
+  const hd = await hh.json();
+  check('health checks', hd.checks?.db === true && hd.checks?.poller === true, JSON.stringify(hd.checks || {}));
+  check('security headers', hh.headers.get('x-content-type-options') === 'nosniff' && hh.headers.get('x-frame-options') === 'SAMEORIGIN');
+  const sys = await fetch(`${BASE}/api/admin/system-status`, { headers: H }).then(r => r.json());
+  check('system status', !!sys.services && sys.services.database === true && sys.security?.sessionCookie.includes('HttpOnly'),
+    `poller=${sys.services?.poller} passChanged=${sys.security?.passwordChanged}`);
+  // اختبار قفل تسجيل الدخول باسم مستخدم وهمي (لا يمس admin)
+  let locked = false;
+  for (let i = 0; i < 9; i++) {
+    const rr = await fetch(`${BASE}/api/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'rate_limit_probe', password: 'wrong' + i }),
+    });
+    if (rr.status === 429) { locked = true; break; }
+  }
+  check('login brute-force lock', locked, '429 بعد 8 محاولات خاطئة');
   console.log(`\n${results.filter(Boolean).length}/${results.length} passed`);
 })().catch(e => { console.error('ERR', e.message); process.exit(1); });
