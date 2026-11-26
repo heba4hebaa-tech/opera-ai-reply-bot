@@ -247,18 +247,6 @@ add('POST', '/api/customer/logout', ({ res }) => {
   return { ok: true };
 });
 add('GET', '/api/customer/me', ({ customer }) => ({ customer: customer || null }));
-
-add('POST', '/api/customer/signin-email', ({ body, res }) => {
-  const email = str(body.email).trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { status: 400, body: { error: 'صيغة البريد غير صحيحة' } };
-  let c = get('SELECT * FROM customers WHERE email = ?', email);
-  if (!c) {
-    run('INSERT INTO customers (email, phone, name, created_at) VALUES (?,?,?,?)', email, '', '', now());
-    c = get('SELECT * FROM customers WHERE email = ?', email);
-  }
-  setCustomerCookie(res, customerToken(c.id));
-  return { ok: true, customer: c };
-});
 add('PUT', '/api/customer/profile', ({ customer, body }) => {
   if (!customer) return { status: 401, body: { error: 'يرجى تسجيل الدخول أولاً' } };
   run('UPDATE customers SET name=?, city=?, address=?, latitude=?, longitude=? WHERE id=?',

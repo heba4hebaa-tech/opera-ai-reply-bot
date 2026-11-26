@@ -46,8 +46,74 @@
     $('categoryChips').innerHTML = `<button class="chip${state.activeCat === 0 ? ' active' : ''}" data-cat="0">الكل</button>` +
       state.categories.map(c => `<button class="chip${state.activeCat === c.id ? ' active' : ''}" data-cat="${c.id}">${esc(c.icon && !c.icon.startsWith('/') ? c.icon : '📦')} ${esc(c.name_ar)}</button>`).join('');
     $('categoryChips').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => {
-      state.activeCat = Number(b.dataset.cat); renderChips(); renderProducts();
+      const catId = Number(b.dataset.cat);
+      if (catId === 0) { state.activeCat = 0; renderChips(); renderProducts(); return; }
+      openCategory(catId);
     });
+  }
+
+  function openCategory(id) {
+    const c = state.categories.find(x => x.id === id);
+    if (!c) return;
+    const prods = state.products.filter(p => p.category_id === id);
+    const html = `<div class="row" style="gap:12px;align-items:center;">
+        <div style="font-size:44px;">${esc(c.icon && !c.icon.startsWith('/') ? c.icon : '📦')}</div>
+        <div><h3 style="margin:0;">${esc(c.name_ar)}</h3><div class="small muted">${esc(c.name_en || '')}</div></div>
+      </div>
+      ${c.description ? `<p class="small muted">${esc(c.description)}</p>` : ''}
+      <div style="margin-top:12px;">
+      ${prods.map(p => `<div class="between" style="padding:8px 0;border-bottom:1px solid #f0f3f7;">
+        <div class="row" style="gap:10px;">
+          <div style="width:52px;height:52px;border-radius:10px;overflow:hidden;background:#f2f6f9;display:flex;align-items:center;justify-content:center;">${icons(p.image_url || p.icon)}</div>
+          <div><b class="small">${esc(p.name_ar)}</b><div class="small muted">${money(p.price, state.info.currency)}</div></div>
+        </div>
+        <button class="btn btn-primary btn-sm" data-addp="${p.id}">＋ أضف</button>
+      </div>`).join('')}
+      </div>
+      ${!prods.length ? `<div class="empty small" style="padding:16px;">لا توجد منتجات في هذا الصنف بعد</div>` : ''}`;
+    const m = modal('🗂️ صنف: ' + c.name_ar, html);
+    m.el.querySelectorAll('[data-addp]').forEach(b => b.onclick = () => {
+      const p = state.products.find(x => x.id === Number(b.dataset.addp));
+      m.close(); openProductModal(p);
+    });
+  }
+
+  function openProductModal(p) {
+    const cat = state.categories.find(c => c.id === p.category_id);
+    const colors = splitOpts(p.colors_json).length ? splitOpts(p.colors_json) : (cat ? splitOpts(cat.colors_json) : []);
+    const sizes = splitOpts(p.sizes_json).length ? splitOpts(p.sizes_json) : (cat ? splitOpts(cat.sizes_json) : []);
+    const gallery = parseJson(p.images_json, []);
+    const images = gallery.length ? gallery : (p.image_url ? [p.image_url] : []);
+    const colorMap = parseJson(p.color_images_json, {});
+    const mm = modal('🛍️ منتج: ' + p.name_ar, `<div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap">
+        <div id="pm_img" style="width:140px;height:140px;border-radius:12px;overflow:hidden;background:#f2f6f9;display:flex;align-items:center;justify-content:center;">${icons(p.image_url || p.icon)}</div>
+        <div style="flex:1;min-width:220px">
+          <h3 style="margin:0 0 6px;">${esc(p.name_ar)}</h3>
+          <div style="font-size:20px;font-weight:800;color:var(--teal-dark);">${money(p.price, state.info.currency)}${p.old_price ? ` <s>${money(p.old_price, state.info.currency)}</s>` : ''}</div>
+          <p class="small muted">${esc(p.description || 'بدون وصف')}</p>
+        </div>
+      </div>
+      ${colors.length ? `<div class="form-row"><label>اللون</label><select id="pm_color" class="small">${colors.map(c => `<option>${esc(c)}</option>`).join('')}</select></div>` : ''}
+      ${sizes.length ? `<div class="form-row"><label>المقاس</label><select id="pm_size" class="small">${sizes.map(s => `<option>${esc(s)}</option>`).join('')}</select></div>` : ''}
+      <div class="form-row" style="margin-top:12px;"><label>الكمية</label><input id="pm_qty" type="number" min="1" value="1" style="width:90px;"></div>
+      <div class="modal-foot"><button class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary" id="pm_add">🛒 أضف للسلة</button></div>`);
+    const syncImg = () => {
+      const color = $('pm_color')?.value || '';
+      const cm = parseJson(p.color_images_json, {});
+      const imgs = parseJson(p.images_json, []);
+      const list2 = imgs.length ? imgs : (p.image_url ? [p.image_url] : []);
+      const url = (color && cm[color]) || list2[0] || p.image_url || p.icon;
+      const el = document.getElementById('pm_img');
+      if (el) el.innerHTML = icons(url);
+    };
+    $('pm_color')?.addEventListener('change', syncImg);
+    mm.el.querySelector('#pm_add').onclick = () => {
+      const color = $('pm_color')?.value || '';
+      const size = $('pm_size')?.value || '';
+      const opts = [color, size].filter(Boolean).join(' / ');
+      addToCart(p.id, opts, Math.max(1, Number($('pm_qty')?.value) || 1));
+      mm.close();
+    };
   }
 
   function renderProducts() {
@@ -154,11 +220,7 @@
   // ------------------------- customer login -------------------------
   function loginModal(after) {
     const m = modal('دخول الزبون 👤', `<div id="loginEmail">
-      <p class="small muted">سجّل بالبريد الإلكتروني — مجاني بلا كود SMS.</p>
-      <div class="form-row"><label>البريد الإلكتروني</label><input id="loginEmailBox" type="email" dir="ltr" required></div>
-      <button class="btn btn-primary" id="signInEmail">سجّل بالبريد الإلكتروني</button></div>
-      <hr style="margin:16px 0;"><div id="loginStep1">
-      <p class="small muted">أو سجّل برقم الجوال — سنرسل لك رمز تحقق من ٦ أرقام (وضع تجربة هنا).</p>
+      <p class="small muted">سجّل برقم الجوال — سنرسل لك رمز تحقق من ٦ أرقام (وضع تجربة هنا).</p>
       <div class="form-row"><label>رقم الجوال</label><input id="loginPhone" dir="ltr" placeholder="2189xxxxxxxx"></div>
       <button class="btn btn-primary" id="sendCode">إرسال الرمز</button></div>
       <div id="loginStep2" class="hidden">
@@ -166,12 +228,6 @@
       <div id="demoCode" class="small pill warn"></div>
       <button class="btn btn-primary" id="verifyCode" style="margin-top:12px;">تأكيد الرمز</button>
       <button class="btn btn-ghost btn-sm" id="resendCode" style="margin-top:8px;">إرسال رمز جديد</button></div>`);
-    const done = () => { state.customer = true; renderCustomer(); m.close(); profileModal(); if (after) after(); };
-    m.el.querySelector('#signInEmail').onclick = async () => {
-      const r = await api('/api/customer/signin-email', { method: 'POST', body: { email: $('loginEmailBox').value } });
-      if (r.ok) { state.customer = r.customer; renderCustomer(); toast('تم تسجيل الدخول بالبريد ✓'); profileModal(); if (after) after(); m.close(); }
-      else toast(r.error || 'تعذر الدخول', true);
-    };
     const send = async () => {
       const r = await api('/api/customer/send-code', { method: 'POST', body: { phone: $('loginPhone').value } });
       if (!r.ok) { toast(r.error || 'تعذر الإرسال', true); return; }
@@ -184,7 +240,7 @@
     m.el.querySelector('#verifyCode').onclick = async () => {
       const r = await api('/api/customer/verify', { method: 'POST', body: { phone: $('loginPhone').value, code: $('loginCode').value } });
       if (!r.ok) { toast(r.error || 'رمز غير صحيح', true); return; }
-      state.customer = r.customer; renderCustomer(); m.close(); toast('تم تسجيل الدخول ✓');
+      state.customer = r.customer; renderCustomer(); m.close(); toast('تم التسجيل عبر رقم الجوال ✓');
       profileModal(); if (after) after();
     };
   }

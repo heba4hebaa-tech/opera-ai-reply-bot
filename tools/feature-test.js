@@ -74,10 +74,9 @@ function check(name, ok, detail = '') { console.log(`${ok ? '✅' : '❌'} ${nam
   results.push(check('customer me', r.data.customer?.name === 'زبون تجريبي'));
 
   r = await call('/api/customer/signin-email', 'POST', { email: 'musteras@example.com' });
-  const customerCookie2 = r.cookie;
-  results.push(check('signin by email', r.status === 200 && r.data.customer?.email === 'musteras@example.com'));
-  r = await call('/api/customer/me', 'GET', undefined, customerCookie2);
-  results.push(check('me with email login', r.data.customer?.email === 'musteras@example.com'));
+  results.push(check('phone-only registration (email endpoint removed)', r.status === 404));
+  r = await call('/api/customer/me', 'GET', undefined, customerCookie);
+  results.push(check('me with phone OTP login', r.data.customer?.name === 'زبون تجريبي'));
 
   r = await call('/api/store/orders', 'POST', {
     customer_name: 'زبون تجريبي', phone: '+218945343522', address: 'طرابلس',
