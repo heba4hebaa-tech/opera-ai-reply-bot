@@ -115,7 +115,7 @@
     box.innerHTML = `<div class="fav-grid">` + list.map(p => {
       const out = Number(p.stock) <= 0;
       return `<article class="p-card" data-detail="${p.id}">
-        <div class="p-media">${p.image_url || p.icon ? `<img src="${esc(p.image_url || p.icon)}" alt="" onerror="this.remove()">` : ''}
+        <div class="p-media">${p.image_url && /^\/|^https?:/.test(p.image_url) ? `<img src="${esc(p.image_url)}" alt="" onerror="this.remove()">` : (p.icon && /^\/|^https?:/.test(p.icon) ? `<img src="${esc(p.icon)}" alt="" onerror="this.remove()">` : `<div style="display:grid;place-items:center;height:100%;font-size:44px;">${esc(p.icon || '🛍️')}</div>`)}
           <button class="p-fav on" data-unfav="${p.id}" aria-label="إزالة">❤️</button>
           ${out ? '<span class="p-flag">نفد</span>' : ''}
         </div>
@@ -354,7 +354,7 @@
     pushRecent(p.id);
     const html = `<div class="pd">
       <div class="pd-gallery"><div class="pd-main" id="pm_img">${icons(mainImg)}</div>
-        <div class="pd-thumbs" id="pm_thumbs">${(images.length ? images : [p.icon]).map((u, i) => `<button type="button" class="pd-thumb${i===0?' active':''}" data-i="${i}"><img src="${esc(u)}" onerror="this.style.display='none'"></button>`).join('')}</div></div>
+        <div class="pd-thumbs" id="pm_thumbs">${(images.length ? images : [p.icon]).filter(u => /^\/|^https?:/.test(String(u || ''))).map((u, i) => `<button type="button" class="pd-thumb${i===0?' active':''}" data-i="${i}"><img src="${esc(u)}" onerror="this.style.display='none'"></button>`).join('')}</div></div>
       <div class="pd-info">
         ${discount ? `<span class="pd-badge">خصم ${discount}%</span>` : ''}${out ? `<span class="pd-badge bad">نفد المخزون</span>` : `<span class="pd-badge ok">متوفر ${esc(p.stock)}</span>`}
         <h2 class="pd-title">${esc(p.name_ar)}</h2>${p.name_en ? `<div class="small muted">${esc(p.name_en)}</div>` : ''}${cat ? `<div class="small muted">الصنف: ${esc(cat.name_ar)}</div>` : ''}
