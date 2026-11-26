@@ -49,8 +49,14 @@ async function poll() {
         if (!fromId || fromId === String(pageId)) continue; // تجاهل رسائل الصفحة (الصادرة)
         const text = String(m.message || '').trim();
         if (!text) continue;
-        const externalId = `poll:${m.id}`;
+        const externalId = String(m.id || '');
+        if (!externalId) continue;
         if (get('SELECT id FROM messages WHERE external_id = ? LIMIT 1', externalId)) continue;
+        // حماية إضافية: إن كان Webhook قد عالج نفس الرسالة بمعرّف مختلف، لا نرد مرتين
+        const twoMinAgo = new Date(Date.now() - 120000).toISOString();
+        const dup = get(`SELECT 1 FROM messages WHERE direction = 'in' AND text = ? AND created_at >= ? AND conversation_id IN
+          (SELECT id FROM conversations WHERE platform = 'messenger' AND psid = ?) LIMIT 1`, text, twoMinAgo, fromId);
+        if (dup) continue;
         stats.messages++;
         // تسجيل حدث يشبه حدث Webhook ليظهر في لوحة التشخيص
         try {
