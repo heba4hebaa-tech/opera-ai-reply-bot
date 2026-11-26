@@ -927,7 +927,7 @@ add('GET', '/api/admin/system-status', () => {
   };
 }, { auth: true });
 
-const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes', 'ads'];
+const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes', 'ads', 'replies', 'post_rules', 'notifications'];
 add('GET', '/api/admin/backup', () => {
   const out = { version: 1, exported_at: now() };
   for (const t of BACKUP_TABLES) out[t] = all(`SELECT * FROM ${t}`);
