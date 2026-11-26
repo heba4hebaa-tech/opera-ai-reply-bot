@@ -1,0 +1,18 @@
+{
+  "name": "LUNZERA",
+  "short_name": "LUNZERA",
+  "description": "متجر حقائب وأمتعة — مساعد ذكي فوري على واتساب ومسنجر",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f7fb",
+  "theme_color": "#0f766e",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/logo.svg", "sizes": "192x192", "type": "image/svg+xml" },
+    { "src": "/logo.svg", "sizes": "512x512", "type": "image/svg+xml" }
+  ]
+}

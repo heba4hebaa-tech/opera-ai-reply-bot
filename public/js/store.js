@@ -109,42 +109,63 @@
   }
 
   function openProductModal(p) {
+    const cur = state.info.currency || '';
     const cat = state.categories.find(c => c.id === p.category_id);
     const colors = splitOpts(p.colors_json).length ? splitOpts(p.colors_json) : (cat ? splitOpts(cat.colors_json) : []);
     const sizes = splitOpts(p.sizes_json).length ? splitOpts(p.sizes_json) : (cat ? splitOpts(cat.sizes_json) : []);
     const gallery = parseJson(p.images_json, []);
     const images = gallery.length ? gallery : (p.image_url ? [p.image_url] : []);
     const colorMap = parseJson(p.color_images_json, {});
-    const mm = modal('🛍️ منتج: ' + p.name_ar, `<div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap">
-        <div id="pm_img" style="width:140px;height:140px;border-radius:12px;overflow:hidden;background:#f2f6f9;display:flex;align-items:center;justify-content:center;">${icons(p.image_url || p.icon)}</div>
-        <div style="flex:1;min-width:220px">
-          <h3 style="margin:0 0 6px;">${esc(p.name_ar)}</h3>
-          <div style="font-size:20px;font-weight:800;color:var(--teal-dark);">${money(p.price, state.info.currency)}${p.old_price ? ` <s>${money(p.old_price, state.info.currency)}</s>` : ''}</div>
-          <p class="small muted">${esc(p.description || 'بدون وصف')}</p>
-        </div>
-      </div>
-      ${colors.length ? `<div class="form-row"><label>اللون</label><select id="pm_color" class="small">${colors.map(c => `<option>${esc(c)}</option>`).join('')}</select></div>` : ''}
-      ${sizes.length ? `<div class="form-row"><label>المقاس</label><select id="pm_size" class="small">${sizes.map(s => `<option>${esc(s)}</option>`).join('')}</select></div>` : ''}
-      <div class="form-row" style="margin-top:12px;"><label>الكمية</label><input id="pm_qty" type="number" min="1" value="1" style="width:90px;"></div>
-      <div class="modal-foot"><button class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary" id="pm_add">🛒 أضف للسلة</button></div>`);
-    const syncImg = () => {
-      const color = $('pm_color')?.value || '';
-      const cm = parseJson(p.color_images_json, {});
-      const imgs = parseJson(p.images_json, []);
-      const list2 = imgs.length ? imgs : (p.image_url ? [p.image_url] : []);
-      const url = (color && cm[color]) || list2[0] || p.image_url || p.icon;
-      const el = document.getElementById('pm_img');
-      if (el) el.innerHTML = icons(url);
-    };
-    $('pm_color')?.addEventListener('change', syncImg);
-    mm.el.querySelector('#pm_add').onclick = () => {
-      const color = $('pm_color')?.value || '';
-      const size = $('pm_size')?.value || '';
-      const opts = [color, size].filter(Boolean).join(' / ');
-      addToCart(p.id, opts, Math.max(1, Number($('pm_qty')?.value) || 1));
-      mm.close();
-    };
+    const related = state.products.filter(x => x.id !== p.id && x.category_id === p.category_id && Number(x.stock) > 0).slice(0, 6);
+    const out = Number(p.stock) <= 0;
+    const discount = p.old_price && Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0;
+    const favs = () => { try { return JSON.parse(localStorage.getItem('opera_favs') || '[]'); } catch { return []; } };
+    const isFav = () => favs().map(Number).includes(Number(p.id));
+    const mainImg = (colorMap[colors[0]] || images[0] || p.image_url || p.icon);
+    pushRecent(p.id);
+    const html = `<div class="pd">
+      <div class="pd-gallery"><div class="pd-main" id="pm_img">${icons(mainImg)}</div>
+        <div class="pd-thumbs" id="pm_thumbs">${(images.length ? images : [p.icon]).map((u, i) => `<button type="button" class="pd-thumb${i===0?' active':''}" data-i="${i}"><img src="${esc(u)}" onerror="this.style.display='none'"></button>`).join('')}</div></div>
+      <div class="pd-info">
+        ${discount ? `<span class="pd-badge">خصم ${discount}%</span>` : ''}${out ? `<span class="pd-badge bad">نفد المخزون</span>` : `<span class="pd-badge ok">متوفر ${esc(p.stock)}</span>`}
+        <h2 class="pd-title">${esc(p.name_ar)}</h2>${p.name_en ? `<div class="small muted">${esc(p.name_en)}</div>` : ''}${cat ? `<div class="small muted">الصنف: ${esc(cat.name_ar)}</div>` : ''}
+        <div class="pd-price">${money(p.price, cur)}${p.old_price ? ` <s>${money(p.old_price, cur)}</s>` : ''}</div>
+        ${p.avg_rating ? `<div class="small" style="color:#e6a23c;">⭐ ${Number(p.avg_rating).toFixed(1)} · ${p.rating_count} تقييم</div>` : ''}
+        ${p.description ? `<p class="pd-desc">${esc(p.description)}</p>` : ''}
+        ${colors.length ? `<div class="pd-opt"><label>اللون</label><div class="pd-choices" id="pm_colors">${colors.map((c,i)=>`<button type="button" class="pd-choice${i===0?' active':''}" data-color="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>` : ''}
+        ${sizes.length ? `<div class="pd-opt"><label>المقاس</label><div class="pd-choices" id="pm_sizes">${sizes.map((s,i)=>`<button type="button" class="pd-choice${i===0?' active':''}" data-size="${esc(s)}">${esc(s)}</button>`).join('')}</div></div>` : ''}
+        <div class="pd-opt"><label>الكمية</label><div class="pd-qty"><button type="button" id="pm_minus">−</button><input id="pm_qty" type="number" min="1" value="1"><button type="button" id="pm_plus">+</button></div></div>
+        <div class="pd-actions"><button class="btn btn-ghost" id="pm_fav">${isFav()?'❤️':'🤍'} مفضّلة</button><button class="btn btn-ghost" id="pm_share">🔗 مشاركة</button></div>
+        <div class="modal-foot" style="border:0;"><button class="btn btn-ghost" id="pm_add" ${out?'disabled':''}>🛒 أضف للسلة</button><button class="btn btn-primary" id="pm_order" ${out?'disabled':''}>⚡ طلب مباشر</button></div>
+      </div></div>
+      ${related.length ? `<div class="pd-related"><h4>قد يعجبك أيضاً</h4><div class="pd-related-grid">${related.map(r=>`<button type="button" class="pd-related-item" data-rel="${r.id}">${icons(r.image_url||r.icon)}<span>${esc(r.name_ar)}</span><b>${money(r.price,cur)}</b></button>`).join('')}</div></div>` : ''}`;
+    const mm = modal('🛍️ ' + p.name_ar, html);
+    const root = mm.el; let selColor = colors[0] || ''; let selSize = sizes[0] || '';
+    const curImages = () => images.length ? images : [p.icon];
+    const setMain = (url) => { const el = root.querySelector('#pm_img'); if (el) el.innerHTML = icons(url); };
+    root.querySelectorAll('.pd-thumb').forEach(b => b.onclick = () => { root.querySelectorAll('.pd-thumb').forEach(x => x.classList.remove('active')); b.classList.add('active'); setMain(curImages()[Number(b.dataset.i)] || mainImg); });
+    root.querySelectorAll('#pm_colors .pd-choice').forEach(b => b.onclick = () => { root.querySelectorAll('#pm_colors .pd-choice').forEach(x => x.classList.remove('active')); b.classList.add('active'); selColor = b.dataset.color || ''; if (colorMap[selColor]) setMain(colorMap[selColor]); });
+    root.querySelectorAll('#pm_sizes .pd-choice').forEach(b => b.onclick = () => { root.querySelectorAll('#pm_sizes .pd-choice').forEach(x => x.classList.remove('active')); b.classList.add('active'); selSize = b.dataset.size || ''; });
+    const qty = () => Math.max(1, Number(root.querySelector('#pm_qty')?.value) || 1);
+    const step = d => { const i = root.querySelector('#pm_qty'); i.value = Math.max(1, qty() + d); };
+    root.querySelector('#pm_minus')?.addEventListener('click', () => step(-1));
+    root.querySelector('#pm_plus')?.addEventListener('click', () => step(1));
+    const opts = () => [selColor, selSize].filter(Boolean).join(' / ');
+    root.querySelector('#pm_add')?.addEventListener('click', () => { addToCartQty(p.id, opts(), qty()); });
+    root.querySelector('#pm_order')?.addEventListener('click', () => { addToCartQty(p.id, opts(), qty(), true); mm.close(); checkout(); });
+    root.querySelector('#pm_fav')?.addEventListener('click', (e) => { const f = favs(); const i = f.map(Number).indexOf(Number(p.id)); if (i >= 0) f.splice(i, 1); else f.push(Number(p.id)); localStorage.setItem('opera_favs', JSON.stringify(f)); e.target.textContent = (i < 0 ? '❤️' : '🤍') + ' مفضّلة'; });
+    root.querySelector('#pm_share')?.addEventListener('click', async () => { const url = location.origin + '/#p' + p.id; try { if (navigator.share) await navigator.share({ title: p.name_ar, url }); else { await navigator.clipboard.writeText(url); toast('تم نسخ الرابط ✓'); } } catch { toast(url); } });
+    root.querySelectorAll('[data-rel]').forEach(b => b.onclick = () => { const r = state.products.find(x => x.id === Number(b.dataset.rel)); mm.close(); openProductModal(r); });
   }
+
+  function addToCartQty(id, options, qty, silent) {
+    const p = state.products.find(x => x.id === id); if (!p || Number(p.stock) <= 0) return;
+    const key = `${id}|${options}`; const exist = state.cart.find(x => x.key === key);
+    if (exist) exist.qty += qty; else state.cart.push({ key, id, name: p.name_ar, price: p.price, qty, icon: p.image_url || p.icon, options });
+    saveCart(); toast(`تمت الإضافة للسلة: ${p.name_ar}`);
+  }
+  function pushRecent(id) { try { const r = JSON.parse(localStorage.getItem('opera_recent') || '[]'); localStorage.setItem('opera_recent', JSON.stringify([Number(id), ...r.filter(x => Number(x) !== Number(id))].slice(0, 12))); } catch {} }
+
 
   function renderProducts() {
     const norm = s => String(s || '').toLowerCase();
@@ -173,9 +194,9 @@
           <img src="${esc(u)}" style="width:38px;height:38px;object-fit:cover;border-radius:7px;border:2px solid ${i === 0 ? 'var(--teal)' : 'transparent'};"></button>`).join('')}
       </div>` : '';
       return `<article class="product-card${out ? ' stock-out' : ''}">
-        <div class="product-img" id="pimg-${p.id}">${icons(first)}</div>
+        <div class="product-img" id="pimg-${p.id}" data-detail="${p.id}">${icons(first)}</div>
         ${thumbs}
-        <div class="product-info"><h3>${esc(p.name_ar)}</h3><p>${esc(p.description || 'بدون وصف')}</p>
+        <div class="product-info"><h3 data-detail="${p.id}" style="cursor:pointer;">${esc(p.name_ar)}</h3><p>${esc(p.description || 'بدون وصف')}</p>
           <div class="price">${money(p.price, cur)}${p.old_price ? `<s>${money(p.old_price, cur)}</s>` : ''}</div>
           ${p.avg_rating ? `<div class="small" style="color:#e6a23c;">⭐ ${Number(p.avg_rating).toFixed(1)} · ${p.rating_count} تقييم</div>` : ''}
           <div class="product-foot"><span class="small muted">${out ? 'نفد المخزون' : `المتوفر: ${p.stock}`}</span>
@@ -200,6 +221,7 @@
       b.parentElement.querySelectorAll('[data-thumb] img').forEach(im => im.style.border = '2px solid transparent');
       b.querySelector('img').style.border = '2px solid var(--teal)';
     });
+    $('productGrid').querySelectorAll('[data-detail]').forEach(b => b.onclick = (e) => { e.stopPropagation(); const p = state.products.find(x => x.id === Number(b.dataset.detail)); if (p) openProductModal(p); });
     $('productGrid').querySelectorAll('[data-add]').forEach(b => b.onclick = () => {
       const id = Number(b.dataset.add);
       const color = $(`[data-color="${id}"]`)?.value || '';

@@ -403,7 +403,11 @@
     const m = modal(a.id ? 'تعديل إعلان' : 'إعلان جديد', `<form id="adForm">
       <div class="form-row"><label>العنوان</label><input name="title" value="${esc(a.title || '')}"></div>
       <div class="form-row"><label>النص</label><textarea name="body">${esc(a.body || '')}</textarea></div>
-      <div class="form-row"><label>رابط الصورة (اختياري)</label><input name="image_url" value="${esc(a.image_url || '')}" placeholder="https://..."></div>
+      <div class="form-row"><label>صورة الإعلان (ارفع من ملفك)</label>
+        <input type="hidden" name="image_url" id="adImgUrl" value="${esc(a.image_url || '')}">
+        <input type="file" id="adImgFile" accept="image/*" style="margin:6px 0;">
+        <div id="adImgPreview" style="margin:6px 0;">${a.image_url ? `<img src="${esc(a.image_url)}" style="max-height:90px;border-radius:10px;">` : ''}</div>
+        <div class="small muted">يمكن رفع صورة من جهازك (لا حاجة لرابط).</div></div>
       <div class="form-row two"><div><label>رابط التوجيه (CTA)</label><input name="link_url" value="${esc(a.link_url || '')}" placeholder="https://..."></div><div><label>نص الزر</label><input name="cta" value="${esc(a.cta || '')}" placeholder="تفاصيل"></div></div>
       <div class="form-row two"><div><label>النوع</label><select name="kind"><option value="banner" ${kind === 'banner' ? 'selected' : ''}>لافتة</option><option value="promo" ${kind === 'promo' ? 'selected' : ''}>ترويج</option><option value="chat" ${kind === 'chat' ? 'selected' : ''}>شات</option></select></div>
         <div><label>المكان</label><select name="placement"><option value="store" ${placement === 'store' ? 'selected' : ''}>متجر</option><option value="messenger" ${placement === 'messenger' ? 'selected' : ''}>مسنجر</option><option value="whatsapp" ${placement === 'whatsapp' ? 'selected' : ''}>واتساب</option><option value="chat" ${placement === 'chat' ? 'selected' : ''}>شات</option><option value="all" ${placement === 'all' ? 'selected' : ''}>الكل</option></select></div></div>
@@ -411,6 +415,12 @@
       <div class="form-row two"><div><label>يبدأ (اختياري)</label><input name="start_at" value="${esc(a.start_at || '')}" placeholder="2026-11-26T00:00:00Z"></div><div><label>ينتهي (اختياري)</label><input name="end_at" value="${esc(a.end_at || '')}" placeholder="2026-12-01T00:00:00Z"></div></div>
       <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary">حفظ</button></div>
     </form>`);
+    const adFile = m.el.querySelector('#adImgFile');
+    if (adFile) adFile.onchange = async () => {
+      const f = adFile.files[0]; if (!f) return; toast('جارٍ رفع الصورة...');
+      try { const url = await uploadFile(f); m.el.querySelector('#adImgUrl').value = url; m.el.querySelector('#adImgPreview').innerHTML = '<img src="' + url + '" style="max-height:90px;border-radius:10px;">'; toast('تم الرفع ✓'); }
+      catch (err) { toast(err.message, true); }
+    };
     m.el.querySelector('#adForm').addEventListener('submit', async e => {
       e.preventDefault();
       const fd = new FormData(e.target);
