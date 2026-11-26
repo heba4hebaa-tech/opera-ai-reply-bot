@@ -20,6 +20,7 @@
     <div class="nav-sep"></div>
     <button class="nav-item" data-section="tester"><span class="ico">🧪</span><span>اختبار الرد</span></button>
     <button class="nav-item" data-section="settings"><span class="ico">⚙️</span><span>الإعدادات</span></button>
+    <button class="nav-item" data-section="system"><span class="ico">🖥️</span><span>حالة النظام</span></button>
     <button class="nav-item" data-section="security"><span class="ico">🔐</span><span>كلمة المرور</span></button>
     <div class="nav-sep"></div>
     <a class="nav-item" href="/"><span class="ico">🛍️</span><span>عرض المتجر</span></a>
@@ -194,6 +195,20 @@
             <input type="file" id="restoreFile" accept="application/json,.json" class="hidden">
           </div>
         </div>
+      </section>
+
+      <!-- system status -->
+      <section class="section" id="sec-system">
+        <div class="section-head"><div><h2>حالة النظام</h2><p class="muted small">فحص شامل لحظي لكل الخدمات — يتحدث تلقائياً</p></div>
+          <div class="row"><button class="btn btn-ghost btn-sm" id="sysRefresh">🔄 تحديث</button><button class="btn btn-primary btn-sm" id="sysRunPoller" style="margin-right:8px;">▶️ فحص الاستطلاع الآن</button></div></div>
+        <div id="sysSummary" class="row wrap" style="gap:8px;margin-bottom:14px;"></div>
+        <div class="grid grid-2">
+          <div class="card"><h3 class="card-title">🔌 الخدمات</h3><div id="sysServices" class="small" style="white-space:pre-wrap;line-height:1.9;"></div></div>
+          <div class="card"><h3 class="card-title">🛡️ الأمان والحماية</h3><div id="sysSecurity" class="small" style="white-space:pre-wrap;line-height:1.9;"></div></div>
+          <div class="card"><h3 class="card-title">🗄️ البيانات</h3><div id="sysData" class="small" style="white-space:pre-wrap;line-height:1.9;"></div></div>
+          <div class="card"><h3 class="card-title">📨 آخر النشاط</h3><div id="sysActivity" class="small" style="white-space:pre-wrap;line-height:1.9;"></div></div>
+        </div>
+        <div class="card" style="margin-top:14px;"><div id="sysHint" class="small muted"></div></div>
       </section>
 
       <!-- security -->

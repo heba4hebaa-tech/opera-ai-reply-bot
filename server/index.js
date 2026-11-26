@@ -109,6 +109,37 @@ function verifyWebhookSignature(req, raw) {
   return sig.length === expected.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
 }
 
+// ------------------------- security -------------------------
+function securityHeaders(res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
+  if (res.localsProto === 'https') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+}
+const loginAttempts = new Map(); // key -> { count, first, lockedUntil }
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FAILS = 8;
+const LOGIN_LOCK_MS = 10 * 60 * 1000;
+function clientIp(req) {
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return fwd || req.socket.remoteAddress || 'unknown';
+}
+function attemptGuard(key) {
+  const t = Date.now();
+  let e = loginAttempts.get(key);
+  if (!e || t - e.first > LOGIN_WINDOW_MS) { e = { count: 0, first: t, lockedUntil: 0 }; loginAttempts.set(key, e); }
+  if (e.lockedUntil > t) return { locked: true, retryAfter: Math.ceil((e.lockedUntil - t) / 1000) };
+  return { locked: false, entry: e };
+}
+function recordFailure(key) {
+  const g = attemptGuard(key);
+  if (g.locked) return g;
+  g.entry.count++;
+  if (g.entry.count >= LOGIN_MAX_FAILS) g.entry.lockedUntil = Date.now() + LOGIN_LOCK_MS;
+  return { locked: false };
+}
+
 // ------------------------- router -------------------------
 const routes = [];
 function compile(pattern) {
@@ -143,7 +174,19 @@ function serveStatic(req, res, pathname) {
 }
 
 // ------------------------- public API -------------------------
-add('GET', '/api/health', () => ({ ok: true, time: now(), build: (() => { try { return require('./build'); } catch { return 'unknown'; } })() }));
+add('GET', '/api/health', () => {
+  const s = getSettings();
+  const checks = { db: true, messenger: false, whatsapp: false, gemini: false, poller: false };
+  try { all('SELECT 1 AS x LIMIT 1'); } catch { checks.db = false; }
+  checks.messenger = !!(s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token);
+  checks.whatsapp = !!(s.wa_access_token || config.WA_ACCESS_TOKEN);
+  checks.gemini = !!config.GEMINI_API_KEY;
+  try { checks.poller = !!poller.status().enabled; } catch {}
+  return {
+    ok: checks.db, time: now(), build: (() => { try { return require('./build'); } catch { return 'unknown'; } })(),
+    uptimeSec: Math.round(process.uptime()), checks,
+  };
+});
 
 add('GET', '/api/store/info', () => {
   const s = getSettings();
@@ -197,11 +240,18 @@ add('POST', '/api/store/orders', ({ body, customer }) => {
   return { ok: true, orderId: Number(info.lastInsertRowid), total };
 });
 
-add('POST', '/api/auth/login', ({ body, res }) => {
+add('POST', '/api/auth/login', ({ body, res, req }) => {
   const username = str(body.username);
   const password = String(body.password ?? '');
+  const key = `${clientIp(req)}|${username.toLowerCase()}`;
+  const guard = attemptGuard(key);
+  if (guard.locked) return { status: 429, body: { error: `محاولات كثيرة — أعد المحاولة بعد ${guard.retryAfter} ثانية` } };
   const admin = get('SELECT * FROM admins WHERE username = ?', username);
-  if (!admin || !verifyPassword(password, admin.password_hash)) return { status: 401, body: { error: 'بيانات الدخول غير صحيحة' } };
+  if (!admin || !verifyPassword(password, admin.password_hash)) {
+    recordFailure(key);
+    return { status: 401, body: { error: 'بيانات الدخول غير صحيحة' } };
+  }
+  loginAttempts.delete(key);
   setSessionCookie(res, sessionToken(admin.id));
   return { ok: true, username: admin.username };
 });
@@ -511,6 +561,7 @@ add('POST', '/api/admin/password', ({ body }) => {
   const admin = get('SELECT * FROM admins WHERE username = ?', username);
   if (!admin || !verifyPassword(oldPass, admin.password_hash)) return { status: 401, body: { error: 'كلمة المرور الحالية غير صحيحة' } };
   run('UPDATE admins SET password_hash=? WHERE id=?', hashPassword(newPass), admin.id);
+  setSetting('admin_password_changed', now());
   return { ok: true };
 }, { auth: true });
 
@@ -712,6 +763,60 @@ add('GET', '/api/admin/webhook-status', () => {
   };
 }, { auth: true });
 
+add('GET', '/api/admin/system-status', () => {
+  const s = getSettings();
+  const events = all('SELECT platform, payload, created_at FROM webhook_events ORDER BY id DESC LIMIT 20');
+  let lastInbound = null, lastVerify = null;
+  for (const e of events) {
+    if (e.platform === 'verify' && !lastVerify) lastVerify = e.created_at;
+    if (lastInbound) continue;
+    try {
+      const p = JSON.parse(e.payload || '{}');
+      const ms = (p.entry || []).flatMap(x => x.messaging || []);
+      const m = ms[0];
+      if (m && (m.message?.text || m.postback?.payload)) lastInbound = { at: e.created_at, text: String(m.message?.text || m.postback?.payload).slice(0, 80), source: e.platform };
+    } catch {}
+  }
+  const ps = (() => { try { return poller.status(); } catch { return { enabled: false }; } })();
+  const st = (() => { try { return all('SELECT COUNT(*) AS n FROM products').n; } catch { return -1; } })();
+  return {
+    build: (() => { try { return require('./build'); } catch { return 'unknown'; } })(),
+    uptimeSec: Math.round(process.uptime()),
+    now: now(),
+    services: {
+      database: st >= 0,
+      messengerToken: !!(s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token),
+      pageId: s.messenger_page_id || s.facebook_page_id || '',
+      whatsapp: !!(s.wa_access_token || config.WA_ACCESS_TOKEN),
+      whatsappNumber: s.whatsapp_number || '',
+      gemini: !!config.GEMINI_API_KEY,
+      poller: !!ps.enabled,
+      pollerStats: ps,
+      webhookLastInbound: lastInbound,
+      webhookLastVerify: lastVerify,
+    },
+    security: {
+      passwordChanged: !!s.admin_password_changed,
+      defaultPasswordActive: !s.admin_password_changed,
+      sessionCookie: 'HttpOnly + SameSite=Lax',
+      loginLock: '8 محاولات خاطئة / 15 دقيقة = قفل 10 دقائق',
+      signatureCheck: !!config.META_APP_SECRET,
+    },
+    data: {
+      categories: (() => { try { return all('SELECT COUNT(*) AS n FROM categories').n; } catch { return -1; } })(),
+      products: st,
+      orders: (() => { try { return all('SELECT COUNT(*) AS n FROM orders').n; } catch { return -1; } })(),
+      conversations: (() => { try { return all('SELECT COUNT(*) AS n FROM conversations').n; } catch { return -1; } })(),
+      messages: (() => { try { return all('SELECT COUNT(*) AS n FROM messages').n; } catch { return -1; } })(),
+      faqs: (() => { try { return all('SELECT COUNT(*) AS n FROM faqs').n; } catch { return -1; } })(),
+    },
+    currency: s.currency || '',
+    hint: ps.enabled
+      ? 'النظام يعمل بوضعين معاً: Webhook Meta + استطلاع احتياطي كل 20 ثانية.'
+      : 'الاستطلاع الاحتياطي متوقف — اضغط زر تشغيل الاستطلاع في إعدادات المسنجر.',
+  };
+}, { auth: true });
+
 const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes'];
 add('GET', '/api/admin/backup', () => {
   const out = { version: 1, exported_at: now() };
@@ -890,6 +995,9 @@ const server = http.createServer(async (req, res) => {
   try { url = new URL(req.url, 'http://localhost'); }
   catch { return text(res, 400, 'Bad request'); }
   const pathname = decodeURIComponent(url.pathname);
+
+  res.localsProto = String(req.headers['x-forwarded-proto'] || 'http');
+  securityHeaders(res);
 
   if (req.method === 'GET' && !pathname.startsWith('/api/') && !pathname.startsWith('/webhooks/')) {
     return serveStatic(req, res, pathname);

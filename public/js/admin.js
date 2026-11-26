@@ -3,7 +3,7 @@
   const $ = id => document.getElementById(id);
   const titles = {
     overview: 'نظرة عامة', categories: 'الأصناف', products: 'المنتجات', orders: 'الطلبات',
-    conversations: 'المحادثات', customers: 'الزبائن والتحقق', faqs: 'الأسئلة الشائعة', tester: 'اختبار الرد', settings: 'الإعدادات', security: 'كلمة المرور',
+    conversations: 'المحادثات', customers: 'الزبائن والتحقق', faqs: 'الأسئلة الشائعة', tester: 'اختبار الرد', settings: 'الإعدادات', system: 'حالة النظام', security: 'كلمة المرور',
   };
   const state = { me: null, categories: [], products: [] };
   const statusClass = s => ({ 'جديد': 'warn', 'قيد التحضير': 'ok', 'تم الشحن': '', 'مكتمل': 'ok', 'ملغي': 'bad' }[s] || '');
@@ -46,6 +46,7 @@
     await Promise.all([loadOverview(), loadCategories(), loadProducts(), loadOrders(), loadConversations(), loadCustomers(), loadFaqs(), loadSettings()]);
   }
 
+  let sysTimer = null;
   function wireNav() {
     document.querySelectorAll('.nav-item[data-section]').forEach(b => b.onclick = () => {
       document.querySelectorAll('.nav-item[data-section]').forEach(x => x.classList.remove('active'));
@@ -54,8 +55,54 @@
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
       $('sec-' + key).classList.add('active');
       $('topTitle').textContent = titles[key] || '';
+      if (key === 'system') { loadSystemStatus(); if (!sysTimer) sysTimer = setInterval(loadSystemStatus, 12000); }
+      else if (sysTimer) { clearInterval(sysTimer); sysTimer = null; }
     });
     $('logoutBtn').onclick = async () => { await api('/api/auth/logout', { method: 'POST' }); location.href = '/login'; };
+    const sr = $('sysRefresh'); if (sr) sr.onclick = () => loadSystemStatus();
+    const sp = $('sysRunPoller');
+    if (sp) sp.onclick = async () => { await api('/api/admin/poller/run', { method: 'POST', body: {} }); await loadSystemStatus(); toast('تم فحص المحادثات ✓'); };
+  }
+
+  const chip = (ok, label) => `<span style="display:inline-block;padding:3px 10px;border-radius:999px;margin:2px 4px 2px 0;font-size:12px;background:${ok ? '#e6f7ee' : '#fdeaea'};color:${ok ? '#127c47' : '#c0392b'};">${ok ? '✅' : '❌'} ${label}</span>`;
+  async function loadSystemStatus() {
+    const r = await api('/api/admin/system-status');
+    if (!r || r.error || !r.services) return;
+    const s = r.services, sec = r.security, d = r.data;
+    $('sysSummary').innerHTML =
+      chip(true, 'الخادم يعمل') + chip(s.database, 'قاعدة البيانات') + chip(s.messengerToken, 'توكن مسنجر') +
+      chip(!!s.pageId, 'صفحة فيسبوك') + chip(s.whatsapp, 'واتساب') + chip(s.gemini, 'Gemini AI') +
+      chip(s.poller, 'الاستطلاع التلقائي') + chip(!!s.webhookLastInbound, 'استقبال رسائل') +
+      chip(sec.passwordChanged, 'كلمة مرور مغيّرة');
+    $('sysServices').textContent = [
+      `الخادم: يعمل ✅ — البناء ${r.build}`,
+      `مدة التشغيل: ${Math.floor(r.uptimeSec / 60)} دقيقة`,
+      `قاعدة البيانات: ${s.database ? 'متصلة ✅' : 'معطلة ❌'}`,
+      `مسنجر: ${s.messengerToken ? 'توكن موجود ✅' : 'بدون توكن ❌'} — الصفحة ${s.pageId || 'غير معروفة'}`,
+      `واتساب: ${s.whatsapp ? 'مفعّل ✅' : 'يحتاج توكن جديد ❌'}${s.whatsappNumber ? ' (' + s.whatsappNumber + ')' : ''}`,
+      `Gemini AI: ${s.gemini ? 'مفعّل ✅' : 'غير مُعدّ (رد محلي)'}`,
+      `الاستطلاع: ${s.poller ? 'يعمل كل 20 ثانية ✅' : 'متوقف ❌'} — رسائل مستلمة: ${s.pollerStats?.messages ?? 0}، أخطاء: ${s.pollerStats?.errors ?? 0}`,
+    ].join('\n');
+    $('sysSecurity').textContent = [
+      `كلمة مرور الأدمن: ${sec.passwordChanged ? 'مغيّرة عن الافتراضية ✅' : 'ما زالت الافتراضية admin123 ⚠️ — غيّرها فوراً من قسم كلمة المرور'}`,
+      `جلسة الدخول: ${sec.sessionCookie} ✅`,
+      `حماية من التخمين: ${sec.loginLock} ✅`,
+      `توقيع Meta Webhook: ${sec.signatureCheck ? 'مفعّل ✅' : 'غير مفعّل (META_APP_SECRET غير مضبوط) — استقبال يعمل لكن التوقيع غير متحقق'}`,
+      `ترويسات الأمان: مفعّلة ✅ (nosniff, frame-options, HSTS, referrer)`,
+    ].join('\n');
+    $('sysData').textContent = [
+      `الأصناف: ${d.categories} · المنتجات: ${d.products}`,
+      `الطلبات: ${d.orders} · المحادثات: ${d.conversations} · الرسائل: ${d.messages}`,
+      `الأسئلة الشائعة: ${d.faqs}`,
+      `العملة: ${r.currency}`,
+      `النسخ الاحتياطي: يُحفظ تلقائياً قبل كل نشر (data/production-backup.json) ✅`,
+    ].join('\n');
+    $('sysActivity').textContent = [
+      `آخر رسالة واردة: ${s.webhookLastInbound ? s.webhookLastInbound.at + '\n  «' + s.webhookLastInbound.text + '» (من: ' + (s.webhookLastInbound.source === 'poll' ? 'استطلاع' : 'Webhook') + ')' : 'لا توجد بعد'}`,
+      `آخر تحقق من Meta: ${s.webhookLastVerify || 'لم يُسجّل بعد'}`,
+      `الاستطلاع: ${s.pollerStats?.enabled ? 'مفعّل ✅' : 'متوقف ❌'} — آخر فحص: ${s.pollerStats?.lastRun || '—'}`,
+    ].join('\n');
+    $('sysHint').textContent = (r.hint || '') + (sec.defaultPasswordActive ? ' ⚠️ غيّر كلمة المرور الافتراضية الآن.' : '');
   }
 
   async function loadOverview() {
