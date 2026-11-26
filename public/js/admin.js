@@ -454,6 +454,21 @@
     box.textContent = lines.join('\n');
     $('webhookStatusAt').textContent = 'آخر فحص: ' + new Date().toLocaleTimeString('ar');
   };
+  const pollerBtn = $('pollerBtn');
+  if (pollerBtn) pollerBtn.onclick = async () => {
+    const box = $('pollerBox');
+    box.textContent = 'جارٍ الفحص...';
+    let p = await api('/api/admin/poller/status');
+    if (!p.enabled && p.creds) {
+      p = await api('/api/admin/poller/start', { method: 'POST', body: {} });
+      box.textContent = 'تم تشغيل الاستطلاع التلقائي ✅\n';
+    }
+    const r = await api('/api/admin/poller/run', { method: 'POST', body: {} });
+    box.textContent = (box.textContent || '') + `الاستطلاع: ${r.enabled ? 'مفعّل ✅' : 'متوقف ❌'}\n` +
+      `كل 20 ثانية | آخر فحص: ${r.lastRun || '—'}\n` +
+      `الرسائل المستلمة: ${r.messages} | الأخطاء: ${r.errors}\n` +
+      `آخر تشغيل: ${r.runs}`;
+  };
 
   $('backupBtn').onclick = async () => {
     const r = await fetch('/api/admin/backup', { credentials: 'same-origin' });

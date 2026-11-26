@@ -73,7 +73,11 @@ async function poll() {
 function start() {
   if (timer) return;
   const { token, pageId } = creds();
-  if (!token || !pageId) return;
+  if (!token || !pageId) {
+    // الإعدادات قد تُستعاد بعد الإقلاع (قاعدة Render مؤقتة) — نعيد المحاولة
+    setTimeout(() => { if (!timer) start(); }, 10000).unref?.();
+    return;
+  }
   firstStart = now();
   poll();
   timer = setInterval(poll, INTERVAL_MS);

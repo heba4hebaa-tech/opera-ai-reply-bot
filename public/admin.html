@@ -156,8 +156,9 @@
           <div class="small muted" style="margin-top:8px;">عنوان Webhook في Meta: <code id="msWebhookUrl"></code> | رمز التحقق: <code>opera-ai-verify-token</code> (أو قيمة VERIFY_TOKEN في .env)</div>
           <p class="small muted">لتغيير الصفحة: أنشئ Page Token للصفحة الجديدة في Meta Developers، الصقه هنا واضغط حفظ — الردود تتحول فوراً. Webhook يجب أن يكون مشتركاً لتلك الصفحة.</p>
           <div style="margin-top:12px;border-top:1px dashed var(--line,#ddd);padding-top:10px;">
-            <div class="row"><button class="btn btn-ghost btn-sm" id="webhookStatusBtn">🧭 حالة الويب هوك (تشخيص)</button><span id="webhookStatusAt" class="small muted"></span></div>
+            <div class="row"><button class="btn btn-ghost btn-sm" id="webhookStatusBtn">🧭 حالة الويب هوك (تشخيص)</button><button class="btn btn-primary btn-sm" id="pollerBtn" style="margin-left:8px;">🔄 حالة الاستطلاع التلقائي</button><span id="webhookStatusAt" class="small muted"></span></div>
             <div id="webhookStatusBox" class="small" style="margin-top:8px;white-space:pre-wrap;line-height:1.7;"></div>
+            <div id="pollerBox" class="small muted" style="margin-top:8px;white-space:pre-wrap;line-height:1.7;"></div>
           </div>
         </div>
         <div class="card" style="margin-top:18px;">
