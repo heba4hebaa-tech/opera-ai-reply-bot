@@ -142,7 +142,7 @@ function serveStatic(req, res, pathname) {
 }
 
 // ------------------------- public API -------------------------
-add('GET', '/api/health', () => ({ ok: true, time: now() }));
+add('GET', '/api/health', () => ({ ok: true, time: now(), build: (() => { try { return require('./build'); } catch { return 'unknown'; } })() }));
 
 add('GET', '/api/store/info', () => {
   const s = getSettings();

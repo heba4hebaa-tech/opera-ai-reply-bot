@@ -199,6 +199,37 @@ const defaults = {
 const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
 for (const [k, v] of Object.entries(defaults)) insertSetting.run(k, v);
 
+// استعادة البيانات من النسخة المحفوظة في المستودع — لأن قاعدة البيانات على Render
+// تُمسح مع كل عملية نشر (ephemeral disk)، فنعيد ما في المستودع عند الإقلاع.
+const RESTORE_FILE = path.join(config.ROOT, 'data', 'production-backup.json');
+const freshDb = (() => { try { return db.prepare('SELECT COUNT(*) AS n FROM categories').get().n === 0; } catch { return false; } })();
+if (process.env.RENDER && freshDb && fs.existsSync(RESTORE_FILE)) {
+  try {
+    const bak = JSON.parse(fs.readFileSync(RESTORE_FILE, 'utf8'));
+    const tables = bak.tables && typeof bak.tables === 'object' ? bak.tables : {};
+    db.exec('BEGIN');
+    for (const [t, rows] of Object.entries(tables)) {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(t)) continue;
+      const list = Array.isArray(rows) ? rows : [];
+      if (!list.length) continue;
+      const cols = Object.keys(list[0]).filter(k => !k.startsWith('_'));
+      if (!cols.length) continue;
+      db.prepare(`DELETE FROM ${t}`).run();
+      const ins = db.prepare(`INSERT INTO ${t} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`);
+      for (const r of list) ins.run(...cols.map(c => (r[c] === undefined ? null : r[c])));
+    }
+    if (bak.settings && typeof bak.settings === 'object') {
+      const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+      for (const [k, v] of Object.entries(bak.settings)) up.run(String(k), String(v ?? ''));
+    }
+    db.exec('COMMIT');
+    console.log('[DB] ✅ استُعيدت البيانات من data/production-backup.json');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch {}
+    console.error('[DB] فشل الاستعادة:', e.message);
+  }
+}
+
 if (db.prepare('SELECT COUNT(*) AS n FROM admins').get().n === 0) {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync('admin123', salt, 64).toString('hex');
