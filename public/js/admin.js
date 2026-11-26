@@ -429,7 +429,30 @@
     const out = $('msTestResult');
     out.textContent = 'جارٍ تفعيل الاشتراك...';
     const r = await api('/api/admin/subscribe-messenger', { method: 'POST', body: {} });
-    out.textContent = r.ok ? '✅ تم تفعيل اشتراكات المسنجر (messages, feed...)' : '❌ ' + (r.error || 'فشل الاشتراك');
+    out.textContent = r.ok ? '✅ تم تفعيل استقبال الرسائل' : '❌ ' + (r.error || 'فشل الاشتراك');
+    if (r.ok) $('webhookStatusBtn')?.click();
+  };
+  const whBtn = $('webhookStatusBtn');
+  if (whBtn) whBtn.onclick = async () => {
+    const box = $('webhookStatusBox');
+    box.textContent = 'جارٍ الفحص...';
+    const r = await api('/api/admin/webhook-status');
+    if (!r || r.error) { box.textContent = 'تعذر الجلب: ' + (r?.error || ''); return; }
+    const lines = [];
+    lines.push(`الرابط: ${location.origin}${r.endpoint}`);
+    lines.push(`رمز التحقق: ${r.verifyToken}`);
+    lines.push(`الصفحة: ${r.pageId || 'غير معروف'} | توكن مسنجر: ${r.hasToken ? 'موجود ✅' : 'مفقود ❌'}`);
+    lines.push(`اشتراك الرسائل: ${r.subscribedAt ? 'مفعّل ✅ (' + r.subscribedAt + ')' : 'لم يُسجّل بعد — اضغط "تفعيل استقبال الرسائل"'}`);
+    lines.push(`آخر تحقق من Meta: ${r.lastVerify ? r.lastVerify.label + ' — ' + r.lastVerify.at : 'لا يوجد ❌ (لم يصل Meta إلى الرابط)'}`);
+    lines.push(`آخر رسالة واردة: ${r.lastMessage ? r.lastMessage.at + ' — من ' + r.lastMessage.sender + ': ' + (r.lastMessage.text || '') : 'لا توجد رسائل بعد'}`);
+    if (r.events?.length) {
+      lines.push('--- آخر الأحداث ---');
+      for (const e of r.events.slice(0, 8)) lines.push(`• ${e.at} — ${e.label}${e.text ? ' — ' + e.text : ''}`);
+    } else lines.push('--- لا توجد أحداث مسجّلة بعد ---');
+    lines.push('');
+    lines.push(r.hint);
+    box.textContent = lines.join('\n');
+    $('webhookStatusAt').textContent = 'آخر فحص: ' + new Date().toLocaleTimeString('ar');
   };
 
   $('backupBtn').onclick = async () => {

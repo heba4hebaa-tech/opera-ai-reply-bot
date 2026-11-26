@@ -580,6 +580,7 @@ add('POST', '/api/admin/subscribe-messenger', async () => {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { status: 400, body: { error: data?.error?.message || `HTTP ${res.status}`, raw: data } };
+    setSetting('messenger_subscribed_at', now());
     // جرّب اشتراك feed بشكل منفصل (يتطلب pages_manage_metadata) — لا تفشل العملية إن لم تتوفر الصلاحية
     let feed = null;
     try {
@@ -589,9 +590,9 @@ add('POST', '/api/admin/subscribe-messenger', async () => {
         signal: AbortSignal.timeout(15000),
       });
       feed = await fr.json().catch(() => ({}));
-      if (fr.ok) return { ok: true, result: feed, feed: true };
+    if (fr.ok) { return { ok: true, result: feed, feed: true, subscribedAt: getSettings().messenger_subscribed_at }; }
     } catch {}
-    return { ok: true, result: data, feed: false, feedWarning: feed?.error?.message || 'اشتراك feed لم يتفعّل (يتطلب pages_manage_metadata) — رسائل المسنجر مفعّلة.' };
+    return { ok: true, result: data, feed: false, subscribedAt: getSettings().messenger_subscribed_at, feedWarning: feed?.error?.message || 'اشتراك feed لم يُفعّل (يتطلب pages_manage_metadata) — رسائل المسنجر مفعّلة.' };
   } catch (e) { return { status: 400, body: { error: e.message } }; }
 }, { auth: true });
 
@@ -677,6 +678,37 @@ add('POST', '/api/admin/messenger/send', async ({ body }) => {
   const { sendMessenger } = require('./services/platforms');
   const r = await sendMessenger(psid, message);
   return { ok: !!r.ok, id: r.id || '', error: r.error || '', full: r.fullError || null };
+}, { auth: true });
+
+add('GET', '/api/admin/webhook-status', () => {
+  const events = all('SELECT platform, payload, created_at FROM webhook_events ORDER BY id DESC LIMIT 30');
+  const classify = e => {
+    if (e.platform === 'verify') return { type: 'verify_ok', label: '✅ تحقق Meta ناجح' };
+    if (e.platform === 'verify_failed') return { type: 'verify_fail', label: '❌ تحقق Meta مرفوض (توكن خاطئ)' };
+    let sender = '', text = '', obj = '';
+    try {
+      const p = JSON.parse(e.payload || '{}');
+      obj = p.object || '';
+      const ms = (p.entry || []).flatMap(x => x.messaging || []);
+      sender = ms[0]?.sender?.id || '';
+      text = (ms[0]?.message?.text || ms[0]?.postback?.payload || '').slice(0, 60);
+    } catch {}
+    return { type: 'message', label: '📨 رسالة واردة', obj, sender, text };
+  };
+  const items = events.map(e => ({ ...classify(e), at: e.created_at }));
+  const lastVerify = items.find(i => i.type === 'verify_ok') || null;
+  const lastMessage = items.find(i => i.type === 'message') || null;
+  const s = getSettings();
+  return {
+    endpoint: '/webhooks/messenger',
+    verifyToken: config.VERIFY_TOKEN,
+    pageId: msCreds().pageId,
+    hasToken: !!msCreds().token,
+    subscribedAt: s.messenger_subscribed_at || '',
+    lastVerify, lastMessage,
+    events: items.slice(0, 15),
+    hint: 'افتح Meta Developers > التطبيق > Messenger/Webhooks، أدخل الرابط والرمز ثم اضغط Verify and Save — سيظهر حدث تحقق هنا فوراً.',
+  };
 }, { auth: true });
 
 const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes'];
