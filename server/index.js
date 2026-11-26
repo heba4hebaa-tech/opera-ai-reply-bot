@@ -12,7 +12,8 @@ const poller = require('./services/poller');
 
 // ------------------------- Web Push (إشعارات الهاتف) -------------------------
 let webPush = null;
-try { webPush = require('web-push'); } catch (e) { console.error('[push] web-push غير متاح:', e.message); }
+try { webPush = require('../vendor/node_modules/web-push'); }
+catch (e) { try { webPush = require('web-push'); } catch (e2) { console.error('[push] web-push غير متاح:', e.message); } }
 function ensureVapid() {
   const s = getSettings();
   if (!webPush) return false;
