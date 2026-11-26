@@ -779,7 +779,7 @@ add('GET', '/api/admin/system-status', () => {
     } catch {}
   }
   const ps = (() => { try { return poller.status(); } catch { return { enabled: false }; } })();
-  const st = (() => { try { return all('SELECT COUNT(*) AS n FROM products').n; } catch { return -1; } })();
+  const st = (() => { try { return all('SELECT COUNT(*) AS n FROM products')[0]?.n ?? -1; } catch { return -1; } })();
   return {
     build: (() => { try { return require('./build'); } catch { return 'unknown'; } })(),
     uptimeSec: Math.round(process.uptime()),
@@ -806,12 +806,12 @@ add('GET', '/api/admin/system-status', () => {
       signatureCheck: !!config.META_APP_SECRET,
     },
     data: {
-      categories: (() => { try { return all('SELECT COUNT(*) AS n FROM categories').n; } catch { return -1; } })(),
+      categories: (() => { try { return all('SELECT COUNT(*) AS n FROM categories')[0]?.n ?? -1; } catch { return -1; } })(),
       products: st,
-      orders: (() => { try { return all('SELECT COUNT(*) AS n FROM orders').n; } catch { return -1; } })(),
-      conversations: (() => { try { return all('SELECT COUNT(*) AS n FROM conversations').n; } catch { return -1; } })(),
-      messages: (() => { try { return all('SELECT COUNT(*) AS n FROM messages').n; } catch { return -1; } })(),
-      faqs: (() => { try { return all('SELECT COUNT(*) AS n FROM faqs').n; } catch { return -1; } })(),
+      orders: (() => { try { return all('SELECT COUNT(*) AS n FROM orders')[0]?.n ?? -1; } catch { return -1; } })(),
+      conversations: (() => { try { return all('SELECT COUNT(*) AS n FROM conversations')[0]?.n ?? -1; } catch { return -1; } })(),
+      messages: (() => { try { return all('SELECT COUNT(*) AS n FROM messages')[0]?.n ?? -1; } catch { return -1; } })(),
+      faqs: (() => { try { return all('SELECT COUNT(*) AS n FROM faqs')[0]?.n ?? -1; } catch { return -1; } })(),
     },
     currency: s.currency || '',
     hint: ps.enabled
