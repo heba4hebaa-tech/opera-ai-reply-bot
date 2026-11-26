@@ -651,6 +651,34 @@ add('POST', '/api/admin/orders/:id/notify', async ({ params, body }) => {
   return { ok: !!r.ok, sent: r.ok === true, skipped: !!r.skipped, error: r.error };
 }, { auth: true });
 
+// ------------------------- messenger diagnostics -------------------------
+function msCreds() {
+  const s = getSettings();
+  const token = s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token || '';
+  const pageId = s.messenger_page_id || s.facebook_page_id || config.FACEBOOK_PAGE_ID || '';
+  return { token, pageId };
+}
+add('GET', '/api/admin/messenger/threads', async () => {
+  const { token, pageId } = msCreds();
+  if (!token || !pageId) return { status: 400, body: { error: 'أضف Page Token و معرف الصفحة أولاً' } };
+  try {
+    const r = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/${pageId}/conversations?fields=id,updated_time,participants&limit=20&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(20000) }).then(x => x.json());
+    if (r.error) return { status: 400, body: { error: r.error.message } };
+    return { ok: true, threads: (r.data || []).map(t => ({
+      id: t.id, updated: t.updated_time || '',
+      users: (t.participants?.data || []).map(p => ({ id: p.id, name: p.name || '' })),
+    })) };
+  } catch (e) { return { status: 400, body: { error: e.message } }; }
+}, { auth: true });
+add('POST', '/api/admin/messenger/send', async ({ body }) => {
+  const psid = str(body.psid).trim();
+  const message = str(body.text).trim();
+  if (!psid || !message) return { status: 400, body: { error: 'psid و text مطلوبان' } };
+  const { sendMessenger } = require('./services/platforms');
+  const r = await sendMessenger(psid, message);
+  return { ok: !!r.ok, id: r.id || '', error: r.error || '', full: r.fullError || null };
+}, { auth: true });
+
 const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes'];
 add('GET', '/api/admin/backup', () => {
   const out = { version: 1, exported_at: now() };
@@ -686,7 +714,11 @@ function webhookVerify({ query, res }) {
   const mode = str(query.get('hub.mode'));
   const token = str(query.get('hub.verify_token'));
   const challenge = str(query.get('hub.challenge'));
-  if (mode === 'subscribe' && token === config.VERIFY_TOKEN) return text(res, 200, challenge);
+  if (mode === 'subscribe' && token === config.VERIFY_TOKEN) {
+    try { run('INSERT INTO webhook_events (platform, payload, created_at) VALUES (?,?,?)', 'verify', JSON.stringify({ challenge: String(challenge).slice(0, 80) }), now()); } catch {}
+    return text(res, 200, challenge);
+  }
+  try { run('INSERT INTO webhook_events (platform, payload, created_at) VALUES (?,?,?)', 'verify_failed', JSON.stringify({ mode: String(mode).slice(0, 40) }), now()); } catch {}
   return text(res, 403, 'Forbidden');
 }
 
