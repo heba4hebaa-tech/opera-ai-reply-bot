@@ -245,10 +245,25 @@ add('GET', '/api/store/categories', () => ({
   items: all('SELECT id, name_ar, name_en, description, icon, has_options, colors_json, sizes_json FROM categories WHERE active = 1 ORDER BY sort_order, id'),
 }));
 
+// تحويل المتغيرات (لون/مقاس/كمية) إلى صيغة موحّدة
+function normalizeVariants(raw) {
+  let list = [];
+  try { const parsed = typeof raw === 'string' ? JSON.parse(raw || '[]') : raw; if (Array.isArray(parsed)) list = parsed; } catch {}
+  const out = [];
+  for (const v of list) {
+    if (!v || typeof v !== 'object') continue;
+    const color = str(v.color).slice(0, 80), size = str(v.size).slice(0, 80);
+    if (!color && !size && !num(v.stock)) continue;
+    out.push({ color, size, stock: Math.max(0, Math.floor(num(v.stock))), price: Math.max(0, num(v.price)) });
+  }
+  return out;
+}
+function variantTotal(vars, fallback) { return vars.length ? vars.reduce((s, v) => s + v.stock, 0) : Math.max(0, Math.floor(num(fallback))); }
+
 add('GET', '/api/store/products', ({ query }) => {
   const cat = Number(query.get('category') || 0);
   const q = str(query.get('q') || '');
-  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json, (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS rating_count';
+  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json, variants_json, (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS rating_count';
   const rows = cat
     ? all(`SELECT ${fields} FROM products p WHERE active=1 AND category_id=? ORDER BY p.id DESC`, cat)
     : all(`SELECT ${fields} FROM products p WHERE active=1 ORDER BY p.id DESC`);
@@ -266,8 +281,20 @@ add('POST', '/api/store/orders', ({ body, customer }) => {
     id: num(i.id), name: str(i.name).slice(0, 200), price: num(i.price),
     qty: Math.max(1, Math.min(99, num(i.qty))),
     options: str(i.options).slice(0, 200),
+    color: str(i.color).slice(0, 80), size: str(i.size).slice(0, 80),
     category: i.category ? num(i.category) : (get('SELECT category_id FROM products WHERE id=?', num(i.id))?.category_id || 0),
   }));
+  // التحقق من توفر الكمية لكل لون/مقاس قبل تأكيد الطلب
+  for (const i of clean) {
+    if (i.id <= 0) continue;
+    const p = get('SELECT name_ar, variants_json FROM products WHERE id=?', i.id);
+    if (!p) continue;
+    let vars = []; try { vars = JSON.parse(p.variants_json || '[]'); } catch {}
+    const v = vars.find(x => (x.color || '') === i.color && (x.size || '') === i.size);
+    if (v && Number(v.stock) < i.qty) {
+      return { status: 400, body: { error: `الكمية المتوفرة من ${p.name_ar}${i.color ? ' (' + i.color + ')' : ''}${i.size ? ' (' + i.size + ')' : ''} هي ${v.stock} فقط` } };
+    }
+  }
   const subtotal = clean.reduce((s, i) => s + i.price * i.qty, 0);
   const s2 = getSettings();
   const method = str(body.delivery_method) || 'توصيل للمنزل';
@@ -277,7 +304,18 @@ add('POST', '/api/store/orders', ({ body, customer }) => {
     name.slice(0, 120), normalizePhone(phone).slice(0, 40) || phone.slice(0, 40), str(body.address).slice(0, 300), str(body.notes).slice(0, 500),
     JSON.stringify(clean), total, 'جديد', 'المتجر', now(), customer?.id || 0,
     num(customer?.latitude || body.latitude), num(customer?.longitude || body.longitude), fee, method, 0);
-  for (const i of clean) { if (i.id > 0) run('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?', i.qty, i.id); }
+  for (const i of clean) {
+    if (i.id <= 0) continue;
+    const p = get('SELECT variants_json FROM products WHERE id=?', i.id);
+    let vars = []; try { vars = JSON.parse(p?.variants_json || '[]'); } catch {}
+    const v = vars.find(x => (x.color || '') === i.color && (x.size || '') === i.size);
+    if (v) {
+      v.stock = Math.max(0, Number(v.stock) - i.qty);
+      run('UPDATE products SET variants_json=?, stock=MAX(0,stock-?) WHERE id=?', JSON.stringify(vars), i.qty, i.id);
+    } else {
+      run('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?', i.qty, i.id);
+    }
+  }
   return { ok: true, orderId: Number(info.lastInsertRowid), total };
 });
 
@@ -475,19 +513,23 @@ add('GET', '/api/admin/products', () => ({
 add('POST', '/api/admin/products', ({ body }) => {
   const name = str(body.name_ar);
   if (!name) return { status: 400, body: { error: 'اسم المنتج مطلوب' } };
-  const info = run(`INSERT INTO products (category_id,name_ar,name_en,description,price,old_price,image_url,icon,stock,active,colors_json,sizes_json,images_json,color_images_json,created_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  const vars = normalizeVariants(body.variants_json);
+  const stock = variantTotal(vars, body.stock);
+  const info = run(`INSERT INTO products (category_id,name_ar,name_en,description,price,old_price,image_url,icon,stock,active,colors_json,sizes_json,images_json,color_images_json,variants_json,created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     num(body.category_id) || null, name, str(body.name_en), str(body.description), num(body.price), num(body.old_price),
-    str(body.image_url), str(body.icon) || '🛍️', num(body.stock), body.active === false ? 0 : 1,
-    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), now());
-  return { ok: true, id: Number(info.lastInsertRowid) };
+    str(body.image_url), str(body.icon) || '🛍️', stock, body.active === false ? 0 : 1,
+    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), JSON.stringify(vars), now());
+  return { ok: true, id: Number(info.lastInsertRowid), stock, variants: vars.length };
 }, { auth: true });
 add('PUT', '/api/admin/products/:id', ({ params, body }) => {
-  run(`UPDATE products SET category_id=?,name_ar=?,name_en=?,description=?,price=?,old_price=?,image_url=?,icon=?,stock=?,active=?,colors_json=?,sizes_json=?,images_json=?,color_images_json=? WHERE id=?`,
+  const vars = normalizeVariants(body.variants_json);
+  const stock = variantTotal(vars, body.stock);
+  run(`UPDATE products SET category_id=?,name_ar=?,name_en=?,description=?,price=?,old_price=?,image_url=?,icon=?,stock=?,active=?,colors_json=?,sizes_json=?,images_json=?,color_images_json=?,variants_json=? WHERE id=?`,
     num(body.category_id) || null, str(body.name_ar), str(body.name_en), str(body.description), num(body.price), num(body.old_price),
-    str(body.image_url), str(body.icon) || '🛍️', num(body.stock), body.active === false ? 0 : 1,
-    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), num(params.id));
-  return { ok: true };
+    str(body.image_url), str(body.icon) || '🛍️', stock, body.active === false ? 0 : 1,
+    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), JSON.stringify(vars), num(params.id));
+  return { ok: true, stock, variants: vars.length };
 }, { auth: true });
 add('DELETE', '/api/admin/products/:id', ({ params }) => {
   run('DELETE FROM products WHERE id=?', num(params.id));

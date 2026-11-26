@@ -225,6 +225,18 @@
       <div><label>ألوان هذا المنتج (فارغ = من الصنف)</label><input name="colors_json" value="${esc(parseOpts(p.colors_json).join('، '))}" placeholder="أحمر، أزرق"></div></div>
       <div class="form-row two"><div><label>مقاسات هذا المنتج (فارغ = من الصنف)</label><input name="sizes_json" value="${esc(parseOpts(p.sizes_json).join('، '))}" placeholder="S، M، L"></div></div>
       <div class="form-row">
+        <label>🧮 الكمية لكل لون/مقاس (اختياري)</label>
+        <input type="hidden" name="variants_json" id="prodVariantsJson" value="${esc(p.variants_json || '[]')}">
+        <div class="row wrap" style="gap:8px;margin-bottom:8px;">
+          <button type="button" class="btn btn-ghost btn-sm" id="genVariants">توليد المتغيرات</button>
+          <input type="number" id="bulkStock" placeholder="كمية موحدة" min="0" style="width:130px;">
+          <button type="button" class="btn btn-ghost btn-sm" id="applyBulkStock">تطبيق على الكل</button>
+          <span class="small muted" id="variantsHint"></span>
+        </div>
+        <div id="variantRows" style="max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:8px;"></div>
+        <div class="small muted" style="margin-top:6px;">اترك المتغيرات فارغة لاستخدام المخزون العام أعلاه. عند وجود متغيرات يُحسب المخزون الإجمالي تلقائياً من مجموعها.</div>
+      </div>
+      <div class="form-row">
         <label>صور المنتج (يمكن اختيار أكثر من صورة)</label>
         <input type="file" id="prodGallery" accept="image/*" multiple>
         <input type="hidden" name="images_json" id="prodImagesJson" value="${esc(p.images_json || '[]')}">
@@ -244,6 +256,54 @@
     let gallery = parseJsonSafe($('prodImagesJson').value, []);
     let colorMap = parseJsonSafe($('prodColorImagesJson').value, {});
     const colorsInput = m.el.querySelector('[name=colors_json]');
+    const sizesInput = m.el.querySelector('[name=sizes_json]');
+    const variantsInput = $('prodVariantsJson');
+
+    const readVariants = () => parseJsonSafe(variantsInput.value, []);
+    const saveVariants = (v) => { variantsInput.value = JSON.stringify(v); renderVariants(); };
+    function combosFromInputs() {
+      const colors = splitOpts(colorsInput.value), sizes = splitOpts(sizesInput.value);
+      const out = [];
+      if (colors.length && sizes.length) colors.forEach(c => sizes.forEach(s => out.push({ color: c, size: s, stock: 0 })));
+      else if (colors.length) colors.forEach(c => out.push({ color: c, size: '', stock: 0 }));
+      else if (sizes.length) sizes.forEach(s => out.push({ color: '', size: s, stock: 0 }));
+      return out;
+    }
+    function generateVariants() {
+      const old = readVariants(), next = combosFromInputs();
+      next.forEach(v => { const found = old.find(x => (x.color || '') === v.color && (x.size || '') === v.size); if (found) v.stock = Number(found.stock) || 0; });
+      if (next.length && !next.some(v => v.stock) && old.length === 1 && !old[0].color && !old[0].size) next.forEach(v => v.stock = Number(old[0].stock) || 0);
+      saveVariants(next);
+    }
+    function renderVariants() {
+      const box = $('variantRows'); if (!box) return;
+      const vars = readVariants();
+      const hint = $('variantsHint');
+      if (hint) hint.textContent = vars.length ? `المجموع: ${vars.reduce((s, v) => s + (Number(v.stock) || 0), 0)} قطعة` : '';
+      if (!vars.length) {
+        box.innerHTML = `<div class="small muted">لا توجد متغيرات — اكتب الألوان/المقاسات ثم اضغط «توليد المتغيرات».</div>`;
+        return;
+      }
+      box.innerHTML = `<div class="row wrap" style="gap:8px;padding:4px 2px 8px;border-bottom:1px solid var(--line);font-weight:800;">
+          <span style="min-width:110px;">اللون</span><span style="min-width:100px;">المقاس</span><span style="min-width:100px;">الكمية</span><span>السعر (اختياري)</span></div>` +
+        vars.map((v, i) => `<div class="row wrap" style="gap:8px;padding:6px 2px;border-bottom:1px solid #f0f3f7;">
+          <span class="pill" style="min-width:110px;">${esc(v.color || '—')}</span>
+          <span class="pill" style="min-width:100px;">${esc(v.size || '—')}</span>
+          <input type="number" min="0" data-vi="${i}" data-vf="stock" value="${Number(v.stock) || 0}" style="width:100px;">
+          <input type="number" min="0" step="0.01" data-vi="${i}" data-vf="price" value="${Number(v.price) || 0}" placeholder="0" style="width:110px;">
+          <button type="button" class="icon-btn" data-vd="${i}" style="background:#fff;">✕</button>
+        </div>`).join('');
+      box.querySelectorAll('[data-vf]').forEach(inp => inp.oninput = () => {
+        const v = readVariants(); const i = Number(inp.dataset.vi);
+        if (v[i]) { v[i][inp.dataset.vf] = Number(inp.value) || 0; variantsInput.value = JSON.stringify(v); if (inp.dataset.vf === 'stock') { const h = $('variantsHint'); if (h) h.textContent = `المجموع: ${v.reduce((s, x) => s + (Number(x.stock) || 0), 0)} قطعة`; } }
+      });
+      box.querySelectorAll('[data-vd]').forEach(b => b.onclick = () => { const v = readVariants(); v.splice(Number(b.dataset.vd), 1); saveVariants(v); });
+    }
+    $('genVariants')?.addEventListener('click', generateVariants);
+    $('applyBulkStock')?.addEventListener('click', () => {
+      const n = Number($('bulkStock').value) || 0; const v = readVariants();
+      v.forEach(x => x.stock = n); saveVariants(v); toast(`تم تطبيق الكمية ${n} على ${v.length} متغير`);
+    });
 
     function renderGallery() {
       $('prodGalleryPreview').innerHTML = gallery.map((u, i) => `<div class="center" style="position:relative;">
@@ -283,8 +343,9 @@
       colorMap[e.target.dataset.colorUrl] = e.target.value;
       $('prodColorImagesJson').value = JSON.stringify(colorMap);
     };
-    colorsInput.oninput = renderColorRows;
-    renderGallery(); renderColorRows();
+    colorsInput.oninput = () => { renderColorRows(); generateVariants(); };
+    sizesInput.oninput = generateVariants;
+    renderGallery(); renderColorRows(); renderVariants();
 
     m.el.querySelector('#prodForm').addEventListener('submit', async e => {
       e.preventDefault();
@@ -297,6 +358,7 @@
         sizes_json: JSON.stringify(splitOpts(f.get('sizes_json'))),
         images_json: f.get('images_json') || '[]',
         color_images_json: f.get('color_images_json') || '{}',
+        variants_json: f.get('variants_json') || '[]',
         active: f.get('active') === 'on',
       };
       const r = await api(p.id ? '/api/admin/products/' + p.id : '/api/admin/products', { method: p.id ? 'PUT' : 'POST', body: payload });

@@ -492,7 +492,7 @@
       <div class="pd-gallery"><div class="pd-main" id="pm_img">${icons(mainImg)}</div>
         <div class="pd-thumbs" id="pm_thumbs">${(images.length ? images : [p.icon]).filter(u => /^\/|^https?:/.test(String(u || ''))).map((u, i) => `<button type="button" class="pd-thumb${i===0?' active':''}" data-i="${i}"><img src="${esc(u)}" onerror="this.style.display='none'"></button>`).join('')}</div></div>
       <div class="pd-info">
-        ${discount ? `<span class="pd-badge">خصم ${discount}%</span>` : ''}${out ? `<span class="pd-badge bad">نفد المخزون</span>` : `<span class="pd-badge ok">متوفر ${esc(p.stock)}</span>`}
+        ${discount ? `<span class="pd-badge">خصم ${discount}%</span>` : ''}${out ? `<span class="pd-badge bad" id="pm_stock">نفد المخزون</span>` : `<span class="pd-badge ok" id="pm_stock">متوفر ${esc(variantStock(p, colors[0] || '', sizes[0] || ''))}</span>`}
         <h2 class="pd-title">${esc(p.name_ar)}</h2>${p.name_en ? `<div class="small muted">${esc(p.name_en)}</div>` : ''}${cat ? `<div class="small muted">الصنف: ${esc(cat.name_ar)}</div>` : ''}
         <div class="pd-price">${money(p.price, cur)}${p.old_price ? ` <s>${money(p.old_price, cur)}</s>` : ''}</div>
         <div id="pm_rating">${p.avg_rating ? `<div class="small" style="color:#e6a23c;">⭐ ${Number(p.avg_rating).toFixed(1)} · ${p.rating_count} تقييم</div>` : ''}</div>
@@ -511,19 +511,30 @@
     const curImages = () => images.length ? images : [p.icon];
     const setMain = (url) => { const el = root.querySelector('#pm_img'); if (el) el.innerHTML = icons(url); };
     root.querySelectorAll('.pd-thumb').forEach(b => b.onclick = () => { root.querySelectorAll('.pd-thumb').forEach(x => x.classList.remove('active')); b.classList.add('active'); setMain(curImages()[Number(b.dataset.i)] || mainImg); });
-    root.querySelectorAll('#pm_colors .pd-choice').forEach(b => b.onclick = () => { root.querySelectorAll('#pm_colors .pd-choice').forEach(x => x.classList.remove('active')); b.classList.add('active'); selColor = b.dataset.color || ''; if (colorMap[selColor]) setMain(colorMap[selColor]); });
-    root.querySelectorAll('#pm_sizes .pd-choice').forEach(b => b.onclick = () => { root.querySelectorAll('#pm_sizes .pd-choice').forEach(x => x.classList.remove('active')); b.classList.add('active'); selSize = b.dataset.size || ''; });
+    root.querySelectorAll('#pm_colors .pd-choice').forEach(b => b.onclick = () => { root.querySelectorAll('#pm_colors .pd-choice').forEach(x => x.classList.remove('active')); b.classList.add('active'); selColor = b.dataset.color || ''; if (colorMap[selColor]) setMain(colorMap[selColor]); updateStockBadge(); });
+    root.querySelectorAll('#pm_sizes .pd-choice').forEach(b => b.onclick = () => { root.querySelectorAll('#pm_sizes .pd-choice').forEach(x => x.classList.remove('active')); b.classList.add('active'); selSize = b.dataset.size || ''; updateStockBadge(); });
     const qty = () => Math.max(1, Number(root.querySelector('#pm_qty')?.value) || 1);
     const step = d => { const i = root.querySelector('#pm_qty'); i.value = Math.max(1, qty() + d); };
     root.querySelector('#pm_minus')?.addEventListener('click', () => step(-1));
     root.querySelector('#pm_plus')?.addEventListener('click', () => step(1));
     const opts = () => [selColor, selSize].filter(Boolean).join(' / ');
-    root.querySelector('#pm_add')?.addEventListener('click', () => { addToCartQty(p.id, opts(), qty()); });
-    root.querySelector('#pm_order')?.addEventListener('click', () => { addToCartQty(p.id, opts(), qty(), true); mm.close(); checkout(); });
+    const variant = () => ({ color: selColor, size: selSize });
+    const updateStockBadge = () => {
+      const badge = root.querySelector('#pm_stock'); if (!badge) return;
+      const n = variantStock(p, selColor, selSize);
+      badge.textContent = n > 0 ? `متوفر ${n}` : 'نفد';
+      badge.classList.toggle('out', n <= 0);
+      const qi = root.querySelector('#pm_qty'); if (qi) qi.max = String(Math.max(1, n));
+      const add = root.querySelector('#pm_add'), order = root.querySelector('#pm_order');
+      if (add) add.disabled = n <= 0; if (order) order.disabled = n <= 0;
+    };
+    root.querySelector('#pm_add')?.addEventListener('click', () => { addToCartQty(p.id, opts(), qty(), false, variant()); });
+    root.querySelector('#pm_order')?.addEventListener('click', () => { addToCartQty(p.id, opts(), qty(), true, variant()); mm.close(); checkout(); });
     root.querySelector('#pm_fav')?.addEventListener('click', (e) => { const on = toggleFav(p.id); e.target.textContent = (on ? '❤️' : '🤍') + ' مفضّلة'; });
     root.querySelector('#pm_share')?.addEventListener('click', async () => { const url = location.origin + '/#p' + p.id; try { if (navigator.share) await navigator.share({ title: p.name_ar, url }); else { await navigator.clipboard.writeText(url); toast('تم نسخ الرابط ✓'); } } catch { toast(url); } });
     root.querySelectorAll('[data-rel]').forEach(b => b.onclick = () => { const r = state.products.find(x => x.id === Number(b.dataset.rel)); mm.close(); openProductModal(r); });
     loadReviews(p, root, cur);
+    updateStockBadge();
   }
 
   // ================= التقييمات =================
@@ -568,11 +579,21 @@
     } catch { box.innerHTML = ''; }
   }
 
-  function addToCartQty(id, options, qty, silent) {
-    const p = state.products.find(x => x.id === id); if (!p || Number(p.stock) <= 0) return;
+  function variantStock(p, color, size) {
+    let vars = []; try { vars = JSON.parse(p?.variants_json || '[]'); } catch { vars = []; }
+    if (!vars.length) return Number(p?.stock) || 0;
+    const v = vars.find(x => (x.color || '') === (color || '') && (x.size || '') === (size || ''));
+    return v ? Number(v.stock) || 0 : 0;
+  }
+  function addToCartQty(id, options, qty, silent, variant) {
+    const p = state.products.find(x => x.id === id); if (!p) return;
+    const color = variant?.color || '', size = variant?.size || '';
+    const available = variantStock(p, color, size);
+    const existing = state.cart.find(x => x.id === id && (x.color || '') === color && (x.size || '') === size);
+    if ((existing?.qty || 0) + qty > available) { toast(`الكمية المتوفرة ${available} فقط`, true); return; }
     const key = `${id}|${options}`; const exist = state.cart.find(x => x.key === key);
-    if (exist) exist.qty += qty; else state.cart.push({ key, id, name: p.name_ar, price: p.price, qty, icon: p.image_url || p.icon, options });
-    saveCart(); if (!silent) toast(`تمت الإضافة: ${p.name_ar}`);
+    if (exist) exist.qty += qty; else state.cart.push({ key, id, name: p.name_ar, price: p.price, qty, icon: p.image_url || p.icon, options, color, size });
+    saveCart(); if (!silent) toast(`تمت الإضافة: ${p.name_ar}${options ? ' (' + options + ')' : ''}`);
   }
   function pushRecent(id) { try { const r = JSON.parse(localStorage.getItem('opera_recent') || '[]'); localStorage.setItem('opera_recent', JSON.stringify([Number(id), ...r.filter(x => Number(x) !== Number(id))].slice(0, 12))); } catch {} }
 
@@ -638,7 +659,7 @@
       const card = b.closest('.p-card');
       const color = card?.querySelector(`[data-color="${id}"]`)?.value || '';
       const size = card?.querySelector(`[data-size="${id}"]`)?.value || '';
-      addToCart(id, [color, size].filter(Boolean).join(' / '));
+      addToCart(id, [color, size].filter(Boolean).join(' / '), { color, size });
     });
     grid.querySelectorAll('[data-detail]').forEach(b => b.onclick = e => {
       e.stopPropagation();
@@ -649,14 +670,8 @@
 
   function saveCart() { localStorage.setItem('opera_cart', JSON.stringify(state.cart)); updateBadges(); renderCart(); }
 
-  function addToCart(id, options) {
-    const p = state.products.find(x => x.id === id);
-    if (!p) return;
-    const key = `${id}|${options}`;
-    const exist = state.cart.find(x => x.key === key);
-    if (exist) exist.qty += 1;
-    else state.cart.push({ key, id, name: p.name_ar, price: p.price, qty: 1, icon: p.image_url || p.icon, options });
-    saveCart(); toast(`تمت الإضافة: ${p.name_ar}`); openCart();
+  function addToCart(id, options, variant) {
+    addToCartQty(id, options, 1, true, variant);
   }
 
   function renderCart() {
