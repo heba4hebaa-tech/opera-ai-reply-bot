@@ -20,75 +20,105 @@ const SYSTEM = `أنت مساعد خدمة عملاء ذكي لمتجر إلكت
 معلومات المتجر:
 {knowledge}`;
 
-function buildSystemPrompt(tone) {
-  return SYSTEM.replaceAll('{tone}', tone || 'ودود ومختصر').replace('{knowledge}', buildKnowledge());
+function buildSystemPrompt(tone, settings) {
+  const s = settings || require('../db').getSettings();
+  let prompt = SYSTEM.replaceAll('{tone}', tone || 'ودود ومختصر').replace('{knowledge}', buildKnowledge());
+  const lang = s.reply_language || 'arabic';
+  const langName = { arabic: 'العربية الفصحى البسيطة', egyptian: 'العربية المصرية العامية', libyan: 'العربية الليبية العامية', english: 'English' }[lang] || 'العربية الفصحى البسيطة';
+  prompt += `\nاللغة المطلوبة للرد: ${langName}.`;
+  if (s.custom_instructions && String(s.custom_instructions).trim()) {
+    prompt += `\n\nتعليمات خاصة من إدارة المتجر (اتبعها بدقة ولا تتعارض مع الحقائق):\n${String(s.custom_instructions).trim().slice(0, 2000)}`;
+  }
+  return prompt;
+}
+
+// تطبيع السجل لتكون الأدوار متناوبة وتبدأ وتنتهي بـ user (يتوافق مع Gemini وOpenAI)
+function normalizeMessages(message, history = []) {
+  const contents = [];
+  for (const h of history.slice(-10)) {
+    const text = String(h.text || '').slice(0, 1000).trim();
+    if (!text) continue;
+    contents.push({ role: h.direction === 'in' ? 'user' : 'model', parts: [{ text }] });
+  }
+  contents.push({ role: 'user', parts: [{ text: String(message).slice(0, 4000) }] });
+  const normalized = [];
+  for (const item of contents) {
+    if (normalized.length && normalized[normalized.length - 1].role === item.role) normalized[normalized.length - 1] = item;
+    else normalized.push(item);
+  }
+  return normalized;
 }
 
 async function askAI(message, history = []) {
-  const key = config.GEMINI_API_KEY;
-  if (!key) return null;
   const settings = require('../db').getSettings();
-  const contents = [];
-  for (const h of history.slice(-8)) {
-    contents.push({ role: h.direction === 'in' ? 'user' : 'model', parts: [{ text: String(h.text || '').slice(0, 1000) }] });
-  }
-  contents.push({ role: 'user', parts: [{ text: String(message).slice(0, 4000) }] });
-  // Gemini يبدأ بـ user وينتهي بـ user، ويجب ألا يتكرر دوران متطابقان
-  const normalized = [];
-  for (const item of contents) {
-    if (normalized.length && normalized[normalized.length - 1].role === item.role) {
-      normalized[normalized.length - 1] = item;
-    } else normalized.push(item);
-  }
-  const body = {
-    system_instruction: { parts: [{ text: buildSystemPrompt(settings.bot_tone) }] },
-    contents: normalized,
-    generationConfig: { temperature: 0.7, maxOutputTokens: 600 },
-  };
-  // قائمة احتياطية من النماذج المجانية حتى لا يتوقف الرد إن تغيّر اسم النموذج
-  const models = [...new Set([config.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'].filter(Boolean))];
-  for (const model of models) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(20000),
-      });
-      if (!res.ok) {
-        const err = await res.text().catch(() => '');
-        const missingModel = [400, 404].includes(res.status) && /model|not found/i.test(err);
-        console.error('[AI] Gemini HTTP', res.status, err.slice(0, 200));
-        if (missingModel) continue;
-        return null;
-      }
-      const data = await res.json();
-      const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
-      return text || null;
-    } catch (e) {
-      console.error('[AI] Gemini error:', e.message);
-      return null;
+  const system = buildSystemPrompt(settings.bot_tone, settings);
+  const normalized = normalizeMessages(message || 'الزبون أرسل صورة', history);
+  const temperature = (() => { const n = Number(settings.ai_temperature); return Number.isFinite(n) && n >= 0 && n <= 2 ? n : 0.6; })();
+  const maxTokens = (() => { const n = Number(settings.ai_max_tokens); return Number.isFinite(n) && n > 0 ? Math.min(2000, n) : 600; })();
+
+  // 1) Gemini (مفتاح مجاني من Google AI Studio) — مع قائمة احتياطية من النماذج المجانية
+  const gemKey = config.GEMINI_API_KEY;
+  if (gemKey) {
+    const models = [...new Set([config.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'].filter(Boolean))];
+    const body = {
+      system_instruction: { parts: [{ text: system }] },
+      contents: normalized,
+      generationConfig: { temperature, maxOutputTokens: maxTokens },
+    };
+    for (const model of models) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(gemKey)}`;
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(12000) });
+        if (!res.ok) {
+          const err = await res.text().catch(() => '');
+          const missingModel = [400, 404].includes(res.status) && /model|not found/i.test(err);
+          console.error('[AI] Gemini HTTP', res.status, err.slice(0, 160));
+          if (missingModel) continue;
+          break; // خطأ مثل 429 — انتقل للمزوّد التالي بدل التوقف
+        }
+        const data = await res.json();
+        const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
+        if (text) return text;
+        break;
+      } catch (e) { console.error('[AI] Gemini error:', e.message); break; }
     }
   }
-  // بديل مجاني سريع (Groq) يعمل بنفس تنسيق OpenAI
+
+  // 2) Groq (بديل مجاني سريع، تنسيق OpenAI) — يعمل عند توفر مفتاح مجاني
   if (config.GROQ_API_KEY) {
     try {
       const msgs = normalized.map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.parts.map(p => p.text).join(' ') }));
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { Authorization: `Bearer ${config.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'system', content: buildSystemPrompt(getSettings().bot_tone) }, ...msgs], temperature: 0.6, max_tokens: 500 }),
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'system', content: system }, ...msgs], temperature, max_tokens: maxTokens }),
         signal: AbortSignal.timeout(20000),
       });
       if (res.ok) {
         const d = await res.json();
         const t = d.choices?.[0]?.message?.content?.trim();
         if (t) return t;
-      }
+      } else { console.error('[AI] Groq HTTP', res.status, (await res.text().catch(() => '')).slice(0, 160)); }
     } catch (e) { console.error('[AI] Groq error:', e.message); }
   }
-  return null;
+
+  // 3) Pollinations — ذكاء اصطناعي حقيقي مجاني بلا مفتاح (كاحتياط موثوق)
+  try {
+    const msgs = normalized.map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.parts.map(p => p.text).join(' ') }));
+    const res = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'system', content: system }, ...msgs], model: 'openai', temperature, max_tokens: maxTokens, seed: Math.floor(Math.random() * 1e6) }),
+      signal: AbortSignal.timeout(25000),
+    });
+    if (res.ok) {
+      const t = (await res.text()).trim();
+      // تأكد أنه نص عربي/مفيد وليس رسالة خطأ JSON
+      if (t && !/^\{.*"error".*\}$/s.test(t)) return t;
+    } else { console.error('[AI] Pollinations HTTP', res.status); }
+  } catch (e) { console.error('[AI] Pollinations error:', e.message); }
+
+  return null; // الرد المحلي الذكي الاحتياطي
 }
 
 async function askImage(message, base64, mime) {

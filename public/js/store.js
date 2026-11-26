@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  const state = { info: {}, categories: [], products: [], activeCat: 0, cart: [], customer: null };
+  const state = { info: {}, categories: [], products: [], activeCat: 0, cart: [], customer: null, ads: [], query: '' };
   try { state.cart = JSON.parse(localStorage.getItem('opera_cart') || '[]') || []; } catch { state.cart = []; }
   const $ = id => document.getElementById(id);
   const icons = v => (String(v || '').startsWith('/') || /^https?:/.test(v))
@@ -11,14 +11,44 @@
   function saveCart() { localStorage.setItem('opera_cart', JSON.stringify(state.cart)); renderCart(); }
 
   async function init() {
-    const [info, cats, prods, me] = await Promise.all([
-      api('/api/store/info'), api('/api/store/categories'), api('/api/store/products'), api('/api/customer/me'),
+    const [info, cats, prods, me, ads] = await Promise.all([
+      api('/api/store/info'), api('/api/store/categories'), api('/api/store/products'), api('/api/customer/me'), api('/api/ads?placement=store').catch(() => ({ items: [] })),
     ]);
     state.info = info || {};
     state.categories = cats.items || [];
     state.products = prods.items || [];
     state.customer = me.customer || null;
-    renderInfo(); renderChips(); renderProducts(); renderCustomer();
+    state.ads = ads.items || [];
+    renderInfo(); renderChips(); renderProducts(); renderCustomer(); renderAds(); wireSearch(); wireScroll();
+  }
+
+  function wireScroll() {
+    const h = document.querySelector('.site-header');
+    const on = () => h && h.classList.toggle('scrolled', window.scrollY > 12);
+    window.addEventListener('scroll', on, { passive: true }); on();
+  }
+  function wireSearch() {
+    const inp = $('searchInput');
+    if (!inp || inp.dataset.wired) return;
+    inp.dataset.wired = '1';
+    inp.oninput = () => { state.query = inp.value.trim(); renderProducts(); };
+  }
+
+  function adCard(a, badge) {
+    const img = a.image_url ? `<img src="${esc(a.image_url)}" alt="" onerror="this.style.display='none'">` : '';
+    const inner = `${badge ? `<span class="ad-badge">${esc(badge)}</span>` : ''}${img}
+      <div><h3>${esc(a.title || '')}</h3>${a.body ? `<p>${esc(a.body)}</p>` : ''}
+      ${a.cta || a.link_url ? `<span class="ad-cta">${esc(a.cta || 'تفاصيل')} ←</span>` : ''}</div>`;
+    const kindCls = `kind-${esc(a.kind || 'banner')}`;
+    if (a.link_url) return `<a class="ad-card ${kindCls}" href="${esc(a.link_url)}" target="_blank" rel="noopener">${inner}</a>`;
+    return `<div class="ad-card ${kindCls}">${inner}</div>`;
+  }
+  function renderAds() {
+    const hero = $('adsHero'), banner = $('adsBanner');
+    const ads = state.ads || [];
+    const top = ads.filter(a => (a.kind || 'banner') === 'banner' || a.kind === 'promo');
+    if (hero) { hero.innerHTML = top.slice(0, 2).map(a => adCard(a, 'إعلان')).join(''); hero.hidden = !top.length; }
+    if (banner) { banner.innerHTML = top.slice(2, 5).map(a => adCard(a, 'عرض')).join(''); banner.hidden = !(top.length > 2); }
   }
 
   function renderCustomer() {
@@ -117,9 +147,12 @@
   }
 
   function renderProducts() {
-    const list = state.activeCat ? state.products.filter(p => p.category_id === state.activeCat) : state.products;
+    const norm = s => String(s || '').toLowerCase();
+    const q = norm(state.query);
+    let list = state.activeCat ? state.products.filter(p => p.category_id === state.activeCat) : state.products;
+    if (q) list = list.filter(p => norm(p.name_ar).includes(q) || norm(p.name_en).includes(q) || norm(p.description).includes(q));
     $('productCount').textContent = `${list.length} منتج`;
-    if (!list.length) { $('productGrid').innerHTML = `<div class="empty" style="grid-column:1/-1;"><span class="big">📭</span>لا توجد منتجات في هذا الصنف</div>`; return; }
+    if (!list.length) { $('productGrid').innerHTML = `<div class="empty" style="grid-column:1/-1;"><span class="big">📭</span>${q ? 'لا توجد نتائج لبحثك' : 'لا توجد منتجات في هذا الصنف'}</div>`; return; }
     const cur = state.info.currency || '';
     const catOf = id => state.categories.find(c => c.id === id);
     $('productGrid').innerHTML = list.map(p => {

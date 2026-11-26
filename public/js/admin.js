@@ -3,7 +3,7 @@
   const $ = id => document.getElementById(id);
   const titles = {
     overview: 'نظرة عامة', categories: 'الأصناف', products: 'المنتجات', orders: 'الطلبات',
-    conversations: 'المحادثات', customers: 'الزبائن والتحقق', faqs: 'الأسئلة الشائعة', tester: 'اختبار الرد', settings: 'الإعدادات', system: 'حالة النظام', security: 'كلمة المرور',
+    conversations: 'المحادثات', customers: 'الزبائن والتحقق', faqs: 'الأسئلة الشائعة', ads: 'الإعلانات', tester: 'اختبار الرد', settings: 'الإعدادات', system: 'حالة النظام', security: 'كلمة المرور',
   };
   const state = { me: null, categories: [], products: [] };
   const statusClass = s => ({ 'جديد': 'warn', 'قيد التحضير': 'ok', 'تم الشحن': '', 'مكتمل': 'ok', 'ملغي': 'bad' }[s] || '');
@@ -43,7 +43,7 @@
     if (!me.user) { location.href = '/login'; return; }
     state.me = me.user;
     wireNav();
-    await Promise.all([loadOverview(), loadCategories(), loadProducts(), loadOrders(), loadConversations(), loadCustomers(), loadFaqs(), loadSettings()]);
+    await Promise.all([loadOverview(), loadCategories(), loadProducts(), loadOrders(), loadConversations(), loadCustomers(), loadFaqs(), loadSettings(), loadAds()]);
   }
 
   let sysTimer = null;
@@ -379,6 +379,52 @@
     }));
   }
 
+  // ------------------------- ads -------------------------
+  async function loadAds() {
+    const d = await api('/api/admin/ads');
+    const rows = $('adRows'); if (!rows) return;
+    const kindL = { banner: 'لافتة', promo: 'ترويج', chat: 'شات' };
+    const placeL = { store: 'متجر', messenger: 'مسنجر', whatsapp: 'واتساب', chat: 'شات', all: 'الكل' };
+    rows.innerHTML = d.items.length ? d.items.map(a => `<tr>
+      <td><b>${esc(a.title || '—')}</b>${a.body ? `<div class="small muted">${esc(a.body.slice(0, 60))}</div>` : ''}</td>
+      <td><span class="pill">${esc(kindL[a.kind] || a.kind)}</span></td>
+      <td><span class="pill">${esc(placeL[a.placement] || a.placement)}</span></td>
+      <td>${a.priority || 0}</td>
+      <td><span class="pill ${a.active ? 'ok' : 'bad'}">${a.active ? 'نشط' : 'مخفي'}</span></td>
+      <td><button class="btn btn-ghost btn-sm" data-ea="${a.id}">تعديل</button> <button class="btn btn-danger btn-sm" data-da="${a.id}">حذف</button></td>
+    </tr>`).join('') : `<tr><td colspan="6" class="empty">لا توجد إعلانات بعد</td></tr>`;
+    rows.querySelectorAll('[data-ea]').forEach(b => b.onclick = async () => { const all = (await api('/api/admin/ads')).items; adForm(all.find(a => a.id === Number(b.dataset.ea))); });
+    rows.querySelectorAll('[data-da]').forEach(b => b.onclick = () => confirmBox('حذف هذا الإعلان؟', async () => { await api('/api/admin/ads/' + b.dataset.da, { method: 'DELETE' }); toast('تم الحذف'); loadAds(); }));
+  }
+
+  function adForm(a) {
+    a = a || {};
+    const kind = a.kind || 'banner', placement = a.placement || 'store';
+    const m = modal(a.id ? 'تعديل إعلان' : 'إعلان جديد', `<form id="adForm">
+      <div class="form-row"><label>العنوان</label><input name="title" value="${esc(a.title || '')}"></div>
+      <div class="form-row"><label>النص</label><textarea name="body">${esc(a.body || '')}</textarea></div>
+      <div class="form-row"><label>رابط الصورة (اختياري)</label><input name="image_url" value="${esc(a.image_url || '')}" placeholder="https://..."></div>
+      <div class="form-row two"><div><label>رابط التوجيه (CTA)</label><input name="link_url" value="${esc(a.link_url || '')}" placeholder="https://..."></div><div><label>نص الزر</label><input name="cta" value="${esc(a.cta || '')}" placeholder="تفاصيل"></div></div>
+      <div class="form-row two"><div><label>النوع</label><select name="kind"><option value="banner" ${kind === 'banner' ? 'selected' : ''}>لافتة</option><option value="promo" ${kind === 'promo' ? 'selected' : ''}>ترويج</option><option value="chat" ${kind === 'chat' ? 'selected' : ''}>شات</option></select></div>
+        <div><label>المكان</label><select name="placement"><option value="store" ${placement === 'store' ? 'selected' : ''}>متجر</option><option value="messenger" ${placement === 'messenger' ? 'selected' : ''}>مسنجر</option><option value="whatsapp" ${placement === 'whatsapp' ? 'selected' : ''}>واتساب</option><option value="chat" ${placement === 'chat' ? 'selected' : ''}>شات</option><option value="all" ${placement === 'all' ? 'selected' : ''}>الكل</option></select></div></div>
+      <div class="form-row two"><div><label>أولوية (أعلى أولاً)</label><input name="priority" type="number" value="${a.priority || 0}"></div><div class="check" style="align-self:end;padding-bottom:10px;"><input type="checkbox" name="active" ${a.active === 0 ? '' : 'checked'}><label>مفعّل</label></div></div>
+      <div class="form-row two"><div><label>يبدأ (اختياري)</label><input name="start_at" value="${esc(a.start_at || '')}" placeholder="2026-11-26T00:00:00Z"></div><div><label>ينتهي (اختياري)</label><input name="end_at" value="${esc(a.end_at || '')}" placeholder="2026-12-01T00:00:00Z"></div></div>
+      <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary">حفظ</button></div>
+    </form>`);
+    m.el.querySelector('#adForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = {
+        title: fd.get('title'), body: fd.get('body'), image_url: fd.get('image_url'), link_url: fd.get('link_url'), cta: fd.get('cta'),
+        kind: fd.get('kind'), placement: fd.get('placement'), priority: Number(fd.get('priority') || 0), active: fd.get('active') === 'on',
+        start_at: fd.get('start_at') || '', end_at: fd.get('end_at') || '',
+      };
+      const r = await api(a.id ? '/api/admin/ads/' + a.id : '/api/admin/ads', { method: a.id ? 'PUT' : 'POST', body: payload });
+      if (r.error) { toast(r.error, true); return; }
+      m.close(); toast('تم الحفظ ✓'); loadAds();
+    });
+  }
+
   function faqForm(f) {
     f = f || {};
     const m = modal(f.id ? 'تعديل سؤال' : 'سؤال جديد', `<form id="faqForm">
@@ -397,6 +443,13 @@
     });
   }
 
+  // أضف إعلان + حفظ تلقائي لمفاتيح الإعلانات
+  const addAdBtn = $('addAd'); if (addAdBtn) addAdBtn.onclick = () => adForm();
+  for (const k of ['set_ads_enabled', 'set_ads_in_chat']) {
+    const el = $(k); if (!el) continue;
+    el.addEventListener('change', () => api('/api/admin/settings', { method: 'PUT', body: { [k.replace('set_', '')]: el.checked ? '1' : '0' } }));
+  }
+
   async function loadSettings() {
     const d = await api('/api/admin/settings');
     for (const [k, v] of Object.entries(d.settings)) {
@@ -412,10 +465,11 @@
   }
 
   $('saveSettings').onclick = async () => {
-    const keys = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+    const keys = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'welcome', 'welcome_messenger', 'welcome_whatsapp', 'custom_instructions', 'reply_language', 'ai_temperature', 'ai_max_tokens', 'footer_text', 'bot_tone', 'ads_enabled', 'ads_in_chat'];
     const payload = {};
     for (const k of keys) {
       const el = $('set_' + k);
+      if (!el) continue;
       payload[k] = el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value;
     }
     const r = await api('/api/admin/settings', { method: 'PUT', body: payload });

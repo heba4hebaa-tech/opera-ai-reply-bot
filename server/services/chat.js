@@ -174,6 +174,10 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
   if (externalId && get('SELECT id FROM messages WHERE external_id = ? LIMIT 1', externalId)) return null;
 
   let conv = get('SELECT * FROM conversations WHERE platform = ? AND psid = ?', platform, psid);
+  const isNewConversation = !conv;
+  // ترحيب عند أول رسالة لكل محادثة (مرة واحدة) — لكل قناة رسالة ترحيب خاصة
+  const priorInbound = conv ? Number(get('SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'in')?.n || 0) : 0;
+  const isFirstMessage = isNewConversation || priorInbound === 0;
   if (!conv) {
     run('INSERT INTO conversations (platform, psid, name, created_at, updated_at) VALUES (?,?,?,?,?)', platform, psid, name, now(), now());
     conv = get('SELECT * FROM conversations WHERE platform = ? AND psid = ?', platform, psid);
@@ -186,12 +190,21 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
   const flowReply = handleOrderDraft(conv, text);
   const statusReplyText = handleOrderStatus(conv, text);
   const ratingReply = handleRating(conv, text);
-  const reply = statusReplyText || flowReply || ratingReply || await generateReply(text, history.slice(0, -1), image);
+  let reply = statusReplyText || flowReply || ratingReply || await generateReply(text, history.slice(0, -1), image);
+  // ترويج إعلاني داخل الشات (دوري بين الإعلانات النشطة، لكل قناة على حدة) — لا يقاطع تدفق الطلب
+  if (!flowReply && !statusReplyText && !ratingReply) {
+    const promo = pickChatAd(platform, conv.id);
+    if (promo) reply = `${reply}\n\n${promo}`;
+  }
   run('INSERT INTO messages (conversation_id, direction, text, external_id, created_at) VALUES (?,?,?,?,?)', conv.id, 'out', reply, '', now());
   run('UPDATE conversations SET updated_at = ? WHERE id = ?', now(), conv.id);
 
   let sent = { ok: true, skipped: !sendReply };
   if (sendReply) {
+    // 1) الترحيب أولاً عند أول تواصل (لكل قناة رسالة خاصة) ثم 2) الرد
+    const settings = getSettings();
+    const welcome = welcomeText(platform, settings);
+    if (isFirstMessage && welcome) { try { await platforms.send(platform, psid, welcome); } catch (e) { console.error('[welcome]', e.message); } }
     sent = await platforms.send(platform, psid, reply);
     let buttons = ['عرض المنتجات', 'أريد الطلب', 'مساعدة'];
     if (close(stripTashkeel(text), ['سعر', 'اسعار', 'كم', 'price', 'بكم'])) {
@@ -201,13 +214,36 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
     const opts = await platforms.sendOptions(platform, psid, 'اختر من الخيارات:', buttons);
     console.log(`[Options] ${platform} ${buttons.join(' | ')} -> ${JSON.stringify(opts)}`);
   }
-  // ترحيب عند أول لقاء (مرة واحدة لكل محادثة)
-  if (String(getSettings().ai_enabled) !== '1' && all('SELECT COUNT(*) n FROM messages WHERE conversation_id = ? AND direction = ?', conv.id, 'out').n === 1) {
-    const settings = getSettings();
-    const welcome = String(settings.greeting || '').replace('{business}', settings.business_name || 'متجرنا');
-    if (welcome) await platforms.send(platform, psid, welcome);
-  }
   return { reply, sent, conversationId: conv.id };
+}
+
+// رسالة الترحيب حسب القناة: welcome_messenger / welcome_whatsapp → welcome → greeting
+// إعلان ترويجي للشات (kind=chat أو promo أو placement=chat/all/القناة) — دوري ويحترم التواريخ
+function pickChatAd(platform, rotationKey = 0) {
+  const s = getSettings();
+  if (String(s.ads_enabled || '1') !== '1' || String(s.ads_in_chat || '1') !== '1') return '';
+  const t = now();
+  let rows;
+  try {
+    rows = all(`SELECT * FROM ads WHERE active = 1 AND kind IN ('chat','promo','banner') AND placement IN ('chat','all','messenger','whatsapp','${platform}') ORDER BY priority DESC, id DESC`);
+  } catch { return ''; }
+  rows = rows.filter(a => !(a.start_at && a.start_at > t) && !(a.end_at && a.end_at < t));
+  if (!rows.length) return '';
+  const ad = rows[Number(rotationKey) % rows.length];
+  const parts = [];
+  const title = String(ad.title || '').trim();
+  const body = String(ad.body || '').trim();
+  if (title) parts.push(`📣 ${title}`);
+  if (body) parts.push(body);
+  if (ad.link_url) parts.push(`${ad.cta ? ad.cta + ': ' : ''}${ad.link_url}`);
+  return parts.join('\n').trim();
+}
+function welcomeText(platform, settings) {
+  const s = settings || getSettings();
+  const perChannel = s[`welcome_${platform}`];
+  const raw = (perChannel && String(perChannel).trim()) || String(s.welcome || '').trim() || String(s.greeting || '').trim();
+  if (!raw) return '';
+  return raw.replaceAll('{business}', s.business_name || 'متجرنا');
 }
 
 module.exports = { handleIncoming, generateReply };

@@ -524,6 +524,42 @@ add('DELETE', '/api/admin/faqs/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
+// ------------------------- ads -------------------------
+function activeAds(placement) {
+  const s = getSettings();
+  if (String(s.ads_enabled || '1') !== '1') return [];
+  const t = now();
+  const placements = placement ? [placement, 'all'] : null;
+  const rows = all('SELECT * FROM ads WHERE active = 1 ORDER BY priority DESC, id DESC');
+  return rows.filter(a => {
+    if (a.start_at && a.start_at > t) return false;
+    if (a.end_at && a.end_at < t) return false;
+    if (placements && !placements.includes(a.placement)) return false;
+    return true;
+  });
+}
+add('GET', '/api/ads', ({ query }) => ({ items: activeAds(query.get('placement') || '') }));
+add('GET', '/api/admin/ads', () => ({ items: all('SELECT * FROM ads ORDER BY priority DESC, id DESC') }), { auth: true });
+add('POST', '/api/admin/ads', ({ body }) => {
+  const info = run(`INSERT INTO ads (title,body,image_url,link_url,cta,kind,placement,active,priority,start_at,end_at,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    str(body.title), str(body.body), str(body.image_url), str(body.link_url), str(body.cta),
+    str(body.kind || 'banner'), str(body.placement || 'store'), body.active === false ? 0 : 1, num(body.priority),
+    str(body.start_at), str(body.end_at), now(), now());
+  return { ok: true, id: Number(info.lastInsertRowid) };
+}, { auth: true });
+add('PUT', '/api/admin/ads/:id', ({ params, body }) => {
+  run(`UPDATE ads SET title=?,body=?,image_url=?,link_url=?,cta=?,kind=?,placement=?,active=?,priority=?,start_at=?,end_at=?,updated_at=? WHERE id=?`,
+    str(body.title), str(body.body), str(body.image_url), str(body.link_url), str(body.cta),
+    str(body.kind || 'banner'), str(body.placement || 'store'), body.active === false ? 0 : 1, num(body.priority),
+    str(body.start_at), str(body.end_at), now(), num(params.id));
+  return { ok: true };
+}, { auth: true });
+add('DELETE', '/api/admin/ads/:id', ({ params }) => {
+  run('DELETE FROM ads WHERE id=?', num(params.id));
+  return { ok: true };
+}, { auth: true });
+
 add('GET', '/api/admin/reviews', () => ({ items: all('SELECT * FROM reviews ORDER BY id DESC LIMIT 200') }), { auth: true });
 add('POST', '/api/admin/reviews', ({ body }) => {
   const pid = Number(body.product_id);
@@ -536,7 +572,7 @@ add('DELETE', '/api/admin/reviews/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
-const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'footer_text', 'bot_tone'];
+const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'welcome', 'welcome_messenger', 'welcome_whatsapp', 'custom_instructions', 'reply_language', 'ai_temperature', 'ai_max_tokens', 'footer_text', 'bot_tone', 'ads_in_chat', 'ads_enabled'];
 add('GET', '/api/admin/settings', () => {
   const s = getSettings();
   const out = {}; SETTING_KEYS.forEach(k => out[k] = s[k] ?? '');
@@ -820,7 +856,7 @@ add('GET', '/api/admin/system-status', () => {
   };
 }, { auth: true });
 
-const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes'];
+const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes', 'ads'];
 add('GET', '/api/admin/backup', () => {
   const out = { version: 1, exported_at: now() };
   for (const t of BACKUP_TABLES) out[t] = all(`SELECT * FROM ${t}`);

@@ -132,6 +132,24 @@ db.exec(`CREATE TABLE IF NOT EXISTS reviews (
   created_at TEXT NOT NULL
 );`);
 db.exec('CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);');
+// الإعلانات: لافتات للمتجر + ترويج داخل الشات + إدارة كاملة من الأدمن
+db.exec(`CREATE TABLE IF NOT EXISTS ads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  image_url TEXT NOT NULL DEFAULT '',
+  link_url TEXT NOT NULL DEFAULT '',
+  cta TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'banner',            -- banner | promo | chat
+  placement TEXT NOT NULL DEFAULT 'store',         -- store | messenger | whatsapp | chat | all
+  active INTEGER NOT NULL DEFAULT 1,
+  priority INTEGER NOT NULL DEFAULT 0,
+  start_at TEXT NOT NULL DEFAULT '',
+  end_at TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_ads_active ON ads(active, priority);');
 ensureColumn('orders', 'delivery_fee', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'delivery_method', "TEXT NOT NULL DEFAULT 'توصيل للمنزل'");
 ensureColumn('orders', 'psid', 'TEXT NOT NULL DEFAULT \'\'');
@@ -193,8 +211,17 @@ const defaults = {
   ai_enabled: '1',
   ai_model: config.GEMINI_MODEL,
   greeting: 'أهلاً بك 👋 أنا مساعد {business}. كيف أقدر أساعدك اليوم؟',
+  welcome: '',
+  welcome_messenger: '',
+  welcome_whatsapp: '',
+  custom_instructions: '',
+  reply_language: 'arabic',
+  ai_temperature: '0.6',
+  ai_max_tokens: '600',
   footer_text: 'نرحب بطلباتكم على مدار الساعة 🤍',
   bot_tone: 'ودود ومختصر',
+  ads_enabled: '1',
+  ads_in_chat: '1',
 };
 const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
 for (const [k, v] of Object.entries(defaults)) insertSetting.run(k, v);

@@ -18,7 +18,7 @@ const OUT = path.join(__dirname, '..', 'data', 'production-backup.json');
   const settingsResp = await fetch(`${BASE}/api/admin/settings`, { headers: H }).then(r => r.json());
   if (!backup || !backup.categories) throw new Error('backup failed: ' + JSON.stringify(backup).slice(0, 200));
   const tables = {};
-  for (const k of ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes']) {
+  for (const k of ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes', 'ads']) {
     tables[k] = Array.isArray(backup[k]) ? backup[k] : [];
   }
   // إزالة الأسرار حتى لا تُرفع إلى المستودع (تعتمد على متغيرات بيئة Render)

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>متجرنا | تسوّق وتكلّم معنا</title>
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/modern.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 </head>
 <body>
@@ -38,6 +39,8 @@
   </section>
 
   <main class="store-body">
+    <!-- لافتة إعلانية علوية -->
+    <div class="ads-banner" id="adsHero" hidden></div>
     <div class="card" style="padding:14px 18px;background:linear-gradient(135deg,#eaf7f4,#f3f8ff);border:1px solid #dceee9;">
       <div class="row wrap" style="justify-content:space-between;">
         <div class="row"><span style="font-size:22px;">💬</span><div><b>أسئلتك؟ مساعدنا يرد عليك فوراً</b><div class="small muted">واتساب ومسنجر — على مدار الساعة</div></div></div>
@@ -50,6 +53,9 @@
       <span class="pill" id="productCount">0 منتج</span>
     </div>
     <div class="chips" id="categoryChips"></div>
+    <div class="search-bar" id="searchBar">🔎 <input id="searchInput" type="search" placeholder="ابحث عن منتج، لون، مقاس..." aria-label="بحث"></div>
+    <!-- لافتات إعلانية -->
+    <div class="ads-banner" id="adsBanner" hidden></div>
     <div class="product-grid" id="productGrid">
       <div class="empty" style="grid-column:1/-1;">جارٍ تحميل المنتجات...</div>
     </div>

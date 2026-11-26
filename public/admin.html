@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>لوحة التحكم | الرد الذكي</title>
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/modern.css">
 </head>
 <body>
 <div class="admin-shell">
@@ -17,6 +18,7 @@
     <button class="nav-item" data-section="conversations"><span class="ico">💬</span><span>المحادثات</span></button>
     <button class="nav-item" data-section="customers"><span class="ico">👥</span><span>الزبائن والتحقق</span></button>
     <button class="nav-item" data-section="faqs"><span class="ico">❓</span><span>الأسئلة الشائعة</span></button>
+    <button class="nav-item" data-section="ads"><span class="ico">📣</span><span>الإعلانات</span></button>
     <div class="nav-sep"></div>
     <button class="nav-item" data-section="tester"><span class="ico">🧪</span><span>اختبار الرد</span></button>
     <button class="nav-item" data-section="settings"><span class="ico">⚙️</span><span>الإعدادات</span></button>
@@ -101,6 +103,19 @@
         <div class="card"><div class="table-wrap"><table><thead><tr><th>السؤال</th><th>الجواب</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="faqRows"></tbody></table></div></div>
       </section>
 
+      <!-- ads -->
+      <section class="section" id="sec-ads">
+        <div class="section-head"><div><h2>الإعلانات والترويج</h2><p class="muted small">لافتات للمتجر + ترويج داخل الشات (مسنجر/واتساب) + تواريخ وأولويات</p></div><button class="btn btn-primary" id="addAd">+ إعلان جديد</button></div>
+        <div class="card" style="margin-bottom:14px;">
+          <div class="form-row two">
+            <label class="row" style="gap:8px;"><input type="checkbox" id="set_ads_enabled" style="width:auto;"> <span>تفعيل الإعلانات عامةً</span></label>
+            <label class="row" style="gap:8px;"><input type="checkbox" id="set_ads_in_chat" style="width:auto;"> <span>إعلانات ترويجية داخل الشات</span></label>
+          </div>
+        </div>
+        <div class="card"><div class="table-wrap"><table><thead><tr><th>العنوان</th><th>النوع</th><th>المكان</th><th>أولوية</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="adRows"></tbody></table></div></div>
+        <p class="small muted">النوع: لافتة / ترويج / شات. المكان: متجر / مسنجر / واتساب / شات / الكل. المتغيرات في النص مثل {business}.</p>
+      </section>
+
       <!-- tester -->
       <section class="section" id="sec-tester">
         <div class="section-head"><div><h2>اختبار الرد الذكي</h2><p class="muted small">جرّب كيف سيرد المساعد على زبونك قبل استقبال الرسائل الحقيقية</p></div></div>
@@ -143,10 +158,14 @@
           </div>
           <div class="card">
             <h3 class="card-title">🤖 المساعد الذكي</h3>
-            <div class="form-row"><label class="check"><input type="checkbox" id="set_ai_enabled"> تفعيل الرد الذكي (عند إيقافه يُستخدم الرد الأساسي)</label></div>
+            <div class="form-row"><label class="check"><input type="checkbox" id="set_ai_enabled"> تفعيل الرد الذكي بالذكاء الاصطناعي (عند إيقافه يُستخدم الرد الأساسي)</label></div>
             <div class="form-row"><label>نبرة الرد</label><select id="set_bot_tone"><option>ودود ومختصر</option><option>رسمي ومهني</option><option>حماسي ومرح</option></select></div>
-            <div class="form-row"><label>رسالة الترحيب</label><textarea id="set_greeting"></textarea></div>
-            <div class="small muted">مفتاح Gemini يُضبط من ملف <code>.env</code>. الحالة الحالية: <span id="runtimeInfo"></span></div>
+            <div class="form-row"><label>لغة الرد</label><select id="set_reply_language"><option value="arabic">العربية الفصحى</option><option value="egyptian">العربية المصرية</option><option value="libyan">العربية الليبية</option><option value="english">English</option></select></div>
+            <div class="form-row two"><div><label>درجة الإبداع (temperature 0–1)</label><input id="set_ai_temperature" type="number" min="0" max="1" step="0.1" value="0.6"></div><div><label>أقصى طول للرد (توكن)</label><input id="set_ai_max_tokens" type="number" min="100" max="2000" step="50" value="600"></div></div>
+            <div class="form-row"><label>رسالة الترحيب العامة</label><textarea id="set_greeting" placeholder="أهلاً بك 👋 أنا مساعد {business}. كيف أقدر أساعدك؟"></textarea></div>
+            <div class="form-row two"><div><label>ترحيب مسنجر فقط</label><textarea id="set_welcome_messenger" placeholder="اتركه فارغاً لاستخدام الترحيب العام"></textarea></div><div><label>ترحيب واتساب فقط</label><textarea id="set_welcome_whatsapp" placeholder="اتركه فارغاً لاستخدام الترحيب العام"></textarea></div></div>
+            <div class="form-row"><label>تعليمات مخصصة للمساعد (System prompt إضافي)</label><textarea id="set_custom_instructions" placeholder="مثال: لا تقدّم خصومات، أجب عن أوقات التوصيل دائماً بالطرابلس، لا تتحدث عن منافسين..."></textarea></div>
+            <div class="small muted">الذكاء الاصطناعي الحقيقي المجاني مفعّل افتراضياً (مزوّد بلا مفتاح). اختيارياً أضف مفتاح Gemini أو Groq المجاني في <code>.env</code>. الحالة: <span id="runtimeInfo"></span></div>
           </div>
         </div>
         <div class="card" style="margin-top:18px;">
