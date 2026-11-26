@@ -37,6 +37,8 @@
     <b id="brandName">LUNZERA</b>
   </div>
   <div class="app-actions">
+    <button class="icon-btn-round" id="hdrNotif" title="التنبيهات" aria-label="التنبيهات">🔔<span class="dot-badge zero" id="notifBadge">0</span></button>
+    <button class="icon-btn-round" id="hdrInstall" title="تثبيت التطبيق" aria-label="تثبيت التطبيق">📲</button>
     <button class="icon-btn-round" id="hdrOrders" title="طلباتي" aria-label="طلباتي">📦</button>
     <button class="icon-btn-round" id="hdrFavs" title="المفضلة" aria-label="المفضلة">❤️<span class="dot-badge zero" id="favBadge">0</span></button>
     <button class="icon-btn-round" id="hdrCart" title="السلة" aria-label="السلة">🛒<span class="dot-badge zero" id="cartBadge">0</span></button>
@@ -163,6 +165,16 @@
     <h3>📦 طلباتي</h3>
   </div>
   <div class="view-body no-bar" id="ordersBody"></div>
+</section>
+
+<!-- شاشة التنبيهات -->
+<section class="app-view" id="viewNotifs" aria-hidden="true">
+  <div class="view-head">
+    <button class="icon-btn-round" id="notifsBack" aria-label="رجوع">→</button>
+    <h3>🔔 التنبيهات</h3>
+    <button class="icon-btn-round" id="notifsRead" title="تعليم الكل كمقروء" aria-label="تعليم الكل كمقروء">✓</button>
+  </div>
+  <div class="view-body no-bar" id="notifsBody"></div>
 </section>
 
 <!-- زر تثبيت التطبيق -->

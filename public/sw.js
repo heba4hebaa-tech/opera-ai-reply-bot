@@ -1,5 +1,5 @@
 /* LUNZERA Service Worker — تطبيق قابل للتثبيت + تخزين مؤقت */
-const CACHE = 'lunzera-v3';
+const CACHE = 'lunzera-v4';
 const ASSETS = [
   '/',
   '/index.html',
@@ -23,6 +23,41 @@ self.addEventListener('activate', e => {
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
+  );
+});
+
+/* ---------------- إشعارات الهاتف (Web Push) ---------------- */
+self.addEventListener('push', e => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch { data = { body: e.data ? e.data.text() : '' }; }
+  const title = data.title || 'LUNZERA';
+  const options = {
+    body: data.body || 'لديك إشعار جديد من متجرنا',
+    icon: data.icon || '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: data.tag || 'lunzera-notification',
+    dir: 'rtl',
+    lang: 'ar',
+    vibrate: [120, 60, 120],
+    data: { url: data.url || '/' },
+    actions: [{ action: 'open', title: 'فتح التطبيق' }],
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const target = new URL((e.notification.data && e.notification.data.url) || '/', self.location.origin).href;
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      for (const c of clients) {
+        if (c.url.includes(self.location.origin)) {
+          c.navigate(target);
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    })
   );
 });
 

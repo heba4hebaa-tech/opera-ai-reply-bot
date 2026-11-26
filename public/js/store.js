@@ -1,6 +1,7 @@
 'use strict';
 (() => {
-  const state = { info: {}, categories: [], products: [], activeCat: 0, cart: [], customer: null, ads: [], query: '', chat: [], chatBusy: false };
+  const state = { info: {}, categories: [], products: [], activeCat: 0, cart: [], customer: null, ads: [], query: '', chat: [], chatBusy: false, notifications: [], seenNotifs: [] };
+  try { state.seenNotifs = JSON.parse(localStorage.getItem('opera_seen_notifs') || '[]') || []; } catch { state.seenNotifs = []; }
   try { state.cart = JSON.parse(localStorage.getItem('opera_cart') || '[]') || []; } catch { state.cart = []; }
   try { state.chat = JSON.parse(localStorage.getItem('opera_chat') || '[]') || []; } catch { state.chat = []; }
   const $ = id => document.getElementById(id);
@@ -209,6 +210,130 @@
     } catch { box.innerHTML = `<p class="muted-app">تعذر التحميل</p>`; }
   }
 
+  // ================= التنبيهات داخل التطبيق + إشعارات الهاتف =================
+  function unseenCount() { return state.notifications.filter(n => !state.seenNotifs.includes(n.id)).length; }
+  function updateNotifBadge() {
+    const n = unseenCount();
+    [['notifBadge', n]].forEach(([id, v]) => {
+      const el = $(id); if (!el) return;
+      el.textContent = v > 99 ? '99+' : v;
+      el.classList.toggle('zero', v === 0);
+    });
+  }
+  function markAllSeen() {
+    state.notifications.forEach(n => { if (!state.seenNotifs.includes(n.id)) state.seenNotifs.push(n.id); });
+    if (state.seenNotifs.length > 300) state.seenNotifs = state.seenNotifs.slice(-300);
+    localStorage.setItem('opera_seen_notifs', JSON.stringify(state.seenNotifs));
+    updateNotifBadge();
+  }
+  async function loadNotifications(silent) {
+    try {
+      const r = await fetch('/api/notifications?limit=40', { credentials: 'same-origin' }).then(x => x.json());
+      const items = Array.isArray(r.items) ? r.items : [];
+      const fresh = silent ? items.filter(n => !state.notifications.some(o => o.id === n.id)) : [];
+      state.notifications = items;
+      updateNotifBadge();
+      if ($('viewNotifs')?.classList.contains('open')) renderNotifications();
+      if (silent && fresh.length) {
+        const n = fresh[0];
+        toast('🔔 ' + (n.title || 'تنبيه جديد') + ' — ' + (n.message || '').slice(0, 60));
+        try {
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(n.title || 'LUNZERA', { body: String(n.message || '').slice(0, 160), icon: '/icon-192.png', tag: 'lunzera-' + n.id });
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+  function renderNotifications() {
+    const box = $('notifsBody'); if (!box) return;
+    const unread = unseenCount();
+    const head = `<div class="push-enable-card">
+      <h4>📲 إشعارات على هاتفك</h4>
+      <p>فعّل الإشعارات لتصلك التنبيهات فوراً حتى لو كان التطبيق مغلقاً — تماماً مثل تطبيقات الهاتف.</p>
+      <button class="btn-app sm" id="pushEnableBtn">${('Notification' in window && Notification.permission === 'granted') ? '✅ الإشعارات مفعّلة' : 'تفعيل إشعارات الهاتف'}</button>
+    </div>`;
+    const list = state.notifications.length
+      ? state.notifications.map(n => {
+          const isNew = !state.seenNotifs.includes(n.id);
+          return `<div class="notif-card${isNew ? ' unread' : ''}">
+            <div class="n-icon">${/طلب|🛒|🧾/.test(n.title + n.message) ? '📦' : /عرض|خصم|🎯/.test(n.title + n.message) ? '🏷️' : '🔔'}</div>
+            <div class="n-body"><b>${esc(n.title || 'تنبيه من المتجر')}</b><p>${esc(n.message || '')}</p>
+              <span class="n-date">${fmtDate(n.created_at)}</span></div>
+            ${isNew ? '<span class="n-new"></span>' : ''}
+          </div>`;
+        }).join('')
+      : `<div class="empty-app"><span class="big">🔕</span><h4>لا توجد تنبيهات بعد</h4><p>ستظهر هنا كل الإشعارات الجديدة من متجرنا</p></div>`;
+    box.innerHTML = head + (unread ? `<div class="row" style="justify-content:space-between;margin-bottom:10px;"><span class="muted-app">${unread} تنبيه جديد</span></div>` : '') + list;
+    box.querySelector('#pushEnableBtn')?.addEventListener('click', enablePush);
+  }
+  async function enablePush() {
+    const btn = $('pushEnableBtn');
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+      toast('متصفحك لا يدعم إشعارات الهاتف — استخدم متصفح حديث', true); return;
+    }
+    try {
+      if (Notification.permission !== 'granted') {
+        const p = await Notification.requestPermission();
+        if (p !== 'granted') { toast('يجب السماح بالإشعارات من المتصفح', true); return; }
+      }
+      if (btn) { btn.disabled = true; btn.textContent = 'جارٍ التفعيل…'; }
+      const reg = await navigator.serviceWorker.ready;
+      const { publicKey } = await fetch('/api/push/vapid-public-key').then(x => x.json());
+      if (!publicKey) throw new Error('no key');
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+      const j = sub.toJSON();
+      const r = await fetch('/api/push/subscribe', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription: { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth } }, user_agent: navigator.userAgent }),
+      }).then(x => x.json());
+      if (!r.ok) throw new Error(r.error || 'فشل الاشتراك');
+      if (btn) { btn.textContent = '✅ الإشعارات مفعّلة على هذا الهاتف'; }
+      toast('تم تفعيل إشعارات الهاتف ✓');
+      new Notification('LUNZERA', { body: 'تم تفعيل الإشعارات — سنرسل لك كل تنبيه فوراً ✅', icon: '/icon-192.png' });
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'إعادة محاولة التفعيل'; }
+      toast('تعذر تفعيل الإشعارات: ' + (e.message || 'خطأ'), true);
+    }
+  }
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  }
+
+  // ================= تثبيت التطبيق =================
+  function installGuide() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const steps = isIOS
+      ? `<div class="info-card"><h4>📱 على iPhone (Safari)</h4>
+          <p class="rev-text">1. اضغط زر <b>مشاركة</b> ⬆️ في أسفل الشاشة.<br>
+          2. اختر <b>إضافة إلى الشاشة الرئيسية</b>.<br>
+          3. اضغط <b>إضافة</b> — سيظهر التطبيق مثل أي تطبيق.</p></div>`
+      : `<div class="info-card"><h4>🤖 على Android (Chrome)</h4>
+          <p class="rev-text">1. اضغط قائمة المتصفح ⋮ أعلى اليمين.<br>
+          2. اختر <b>تثبيت التطبيق</b> أو <b>إضافة إلى الشاشة الرئيسية</b>.<br>
+          3. اضغط <b>تثبيت</b> — سيظهر التطبيق على هاتفك.</p></div>`;
+    const m = modal('تطبيق LUNZERA على هاتفك 📲', `
+      <div class="center"><div style="font-size:42px;">📲</div><p class="muted-app">ثبّت المتجر على شاشتك الرئيسية — يعمل مثل تطبيق حقيقي، ويقبل الإشعارات.</p></div>
+      ${steps}
+      <div class="info-card"><h4>✅ ماذا تحصل عليه؟</h4>
+        <p class="rev-text">• فتح سريع بضغطة واحدة<br>• تجربة كاملة الشاشة بدون متصفح<br>• إشعارات فورية حتى والتطبيق مغلق<br>• يعمل بدون إنترنت للصفحات المحمّلة</p></div>
+      <div class="modal-foot"><button class="btn-app ghost" data-close>إغلاق</button>
+        <button class="btn-app primary" id="doInstall">${deferredPrompt ? 'تثبيت الآن' : 'حسناً، فهمت'}</button></div>`);
+    m.el.querySelector('#doInstall').onclick = async () => {
+      if (deferredPrompt) {
+        m.close();
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') toast('جارٍ تثبيت التطبيق…');
+        deferredPrompt = null;
+        $('installBanner')?.classList.remove('show');
+      } else { m.close(); toast('استخدم خطوات المتصفح أعلاه لتثبيت التطبيق'); }
+    };
+  }
+
   async function init() {
     const [info, cats, prods, me, ads] = await Promise.all([
       api('/api/store/info'), api('/api/store/categories'), api('/api/store/products'), api('/api/customer/me'), api('/api/ads?placement=store').catch(() => ({ items: [] })),
@@ -220,6 +345,8 @@
     state.ads = ads.items || [];
     renderInfo(); renderChips(); renderProducts(); renderCustomer(); renderAds(); wireSearch(); wireScroll(); wireTabs(); wireChat(); wireHeader();
     updateBadges(); renderChat(); hideSplash(); autoAds();
+    loadNotifications();
+    setInterval(() => loadNotifications(true), 60000); // فحص التنبيهات كل دقيقة
     if (location.hash.startsWith('#p')) {
       const p = state.products.find(x => x.id === Number(location.hash.slice(2)));
       if (p) setTimeout(() => openProductModal(p), 700);
@@ -251,6 +378,10 @@
     $('hdrCart')?.addEventListener('click', openCart);
     $('hdrFavs')?.addEventListener('click', () => { setTabActive('favs'); renderFavs(); openView('viewFavs'); });
     $('hdrOrders')?.addEventListener('click', () => { setTabActive('home'); renderOrders(); openView('viewOrders'); });
+    $('hdrNotif')?.addEventListener('click', () => { renderNotifications(); openView('viewNotifs'); setTimeout(markAllSeen, 900); });
+    $('hdrInstall')?.addEventListener('click', installGuide);
+    $('notifsBack')?.addEventListener('click', closeViews);
+    $('notifsRead')?.addEventListener('click', () => { markAllSeen(); renderNotifications(); toast('تم تعليم التنبيهات كمقروءة'); });
   }
 
   // ================= شريط إعلاني تلقائي =================
@@ -297,7 +428,12 @@
     if (s.footerText && $('footerText')) $('footerText').textContent = s.footerText;
     const wa = String(s.whatsappNumber || '').replace(/\D/g, '');
     const waUrl = wa ? `https://wa.me/${wa}?text=${encodeURIComponent('مرحباً، أريد الاستفسار عن منتجاتكم')}` : '';
-    if ($('waLink')) { $('waLink').href = waUrl || '#'; $('waLink').onclick = e => { if (!waUrl) { e.preventDefault(); toast('لم يتم ضبط رقم واتساب بعد', true); } }; }
+    if ($('waLink')) {
+      const shown = wa.startsWith('218') ? '0' + wa.slice(3) : wa;
+      $('waLink').textContent = wa ? `📱 واتساب: ${shown}` : '📱 واتساب';
+      $('waLink').href = waUrl || '#';
+      $('waLink').onclick = e => { if (!waUrl) { e.preventDefault(); toast('لم يتم ضبط رقم واتساب بعد', true); } };
+    }
     const ms = s.messengerLink || (s.messengerPageId ? `https://m.me/${s.messengerPageId}` : '');
     if ($('msLink')) { if (ms) $('msLink').href = ms; $('msLink').onclick = e => { if (!ms) { e.preventDefault(); toast('لم يتم ضبط صفحة مسنجر بعد', true); } }; }
   }
@@ -784,14 +920,7 @@
     e.preventDefault(); deferredPrompt = e;
     if (localStorage.getItem('opera_install_dismissed') !== '1') $('installBanner')?.classList.add('show');
   });
-  $('installGo')?.addEventListener('click', async () => {
-    if (!deferredPrompt) { toast('افتح المتصفح ← القائمة ← «إضافة إلى الشاشة الرئيسية”', true); return; }
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') toast('جاري التثبيت…');
-    deferredPrompt = null;
-    $('installBanner')?.classList.remove('show');
-  });
+  $('installGo')?.addEventListener('click', installGuide);
   $('installX')?.addEventListener('click', () => { $('installBanner')?.classList.remove('show'); localStorage.setItem('opera_install_dismissed', '1'); });
 
   // ================= Service Worker (تطبيق قابل للتثبيت) =================

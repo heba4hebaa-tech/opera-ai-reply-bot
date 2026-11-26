@@ -375,6 +375,35 @@ html[data-theme="dark"] .status-pill.s4 { background: rgba(185,28,28,.28); }
 .auto-ads-dots i { width: 7px; height: 7px; border-radius: 99px; background: rgba(255,255,255,.55); transition: all .3s; }
 .auto-ads-dots i.on { width: 20px; background: #fff; }
 
+/* ---------------- التنبيهات داخل التطبيق ---------------- */
+.notif-card {
+  background: var(--app-card); border: 1px solid var(--app-line); border-radius: 18px;
+  padding: 14px 15px; margin-bottom: 11px; box-shadow: var(--app-shadow);
+  display: flex; gap: 12px; align-items: flex-start; position: relative;
+  animation: cardUp .4s var(--app-ease) both;
+}
+.notif-card.unread { border-inline-start: 4px solid var(--app-brand-2); }
+.notif-card .n-icon {
+  width: 42px; height: 42px; border-radius: 14px; flex: 0 0 42px; display: grid; place-items: center;
+  background: linear-gradient(135deg, rgba(15,118,110,.14), rgba(20,184,166,.2)); font-size: 20px;
+}
+.notif-card .n-body { flex: 1; min-width: 0; }
+.notif-card .n-body b { font-size: 13.5px; display: block; margin-bottom: 4px; }
+.notif-card .n-body p { font-size: 13px; color: var(--app-muted); line-height: 1.65; margin: 0; white-space: pre-wrap; word-break: break-word; }
+.notif-card .n-date { font-size: 10.5px; color: var(--app-muted); opacity: .8; margin-top: 7px; display: block; }
+.notif-card .n-new {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--app-brand-2); flex: 0 0 9px; margin-top: 5px;
+  box-shadow: 0 0 0 4px rgba(20,184,166,.16);
+}
+.push-enable-card {
+  background: linear-gradient(135deg, var(--app-brand), #0b4f49); color: #fff; border-radius: 20px;
+  padding: 16px; margin-bottom: 14px; box-shadow: 0 16px 34px -18px rgba(15,118,110,.9);
+}
+.push-enable-card h4 { margin: 0 0 5px; font-size: 15px; }
+.push-enable-card p { margin: 0 0 12px; font-size: 12px; opacity: .82; line-height: 1.6; }
+.push-enable-card .btn-app { background: #fff; color: var(--app-brand-ink); }
+.push-enable-card .btn-app:disabled { opacity: .6; }
+
 /* ---------------- تمييزات صغيرة ---------------- */
 .divider-app { height: 1px; background: var(--app-line); margin: 14px 0; }
 .muted-app { color: var(--app-muted); font-size: 12.5px; }

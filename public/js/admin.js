@@ -659,7 +659,7 @@ async function loadNotifications() {
 const sendNotifBtn = $('sendNotif'); if (sendNotifBtn) sendNotifBtn.onclick = async () => {
   const msg = $('notif_msg').value.trim(); if (!msg) { toast('نص التنبيه مطلوب', true); return; }
   const r = await api('/api/admin/notify', { method: 'POST', body: { title: $('notif_title').value, message: msg, platform: $('notif_platform').value, psid: $('notif_psid').value.trim() || undefined } });
-  if (r.ok) { toast(`تم الإرسال — نجح ${r.sent}/${r.targets} ✓`); $('notif_msg').value = ''; loadNotifications(); } else toast(r.error || 'فشل الإرسال', true);
+  if (r.ok) { toast(`تم الإرسال ✓ — التطبيق/الهاتف: ${r.pushSent || 0} · محادثات: ${r.sent - (r.pushSent || 0)}/${r.targets}`); $('notif_msg').value = ''; loadNotifications(); } else toast(r.error || 'فشل الإرسال', true);
 };
 
 async function loadPostRules() {

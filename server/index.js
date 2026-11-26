@@ -10,6 +10,46 @@ const { credentials: waCredentials, sendWhatsApp } = require('./services/platfor
 const { creds: fbCreds, sendPagePost, replyPost, replyComment, graph: fbGraph } = require('./services/facebook');
 const poller = require('./services/poller');
 
+// ------------------------- Web Push (إشعارات الهاتف) -------------------------
+let webPush = null;
+try { webPush = require('web-push'); } catch (e) { console.error('[push] web-push غير متاح:', e.message); }
+function ensureVapid() {
+  const s = getSettings();
+  if (!webPush) return false;
+  if (s.vapid_public_key && s.vapid_private_key) {
+    try { webPush.setVapidDetails('mailto:admin@opera.local', s.vapid_public_key, s.vapid_private_key); return true; }
+    catch { /* regenerate below */ }
+  }
+  try {
+    const keys = webPush.generateVAPIDKeys();
+    setSetting('vapid_public_key', keys.publicKey);
+    setSetting('vapid_private_key', keys.privateKey);
+    webPush.setVapidDetails('mailto:admin@opera.local', keys.publicKey, keys.privateKey);
+    console.log('[push] تم توليد مفاتيح VAPID');
+    return true;
+  } catch (e) { console.error('[push] فشل توليد المفاتيح:', e.message); return false; }
+}
+ensureVapid();
+async function pushToAll(title, message, url) {
+  if (!ensureVapid()) return 0;
+  const subs = all('SELECT endpoint, p256dh, auth FROM push_subscriptions');
+  let sent = 0;
+  for (const s of subs) {
+    try {
+      await webPush.sendNotification(
+        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        JSON.stringify({ title: String(title || ''), body: String(message || ''), url: url || '/', icon: '/icon-192.png' }),
+        { TTL: 86400 }
+      );
+      sent++;
+    } catch (e) {
+      const code = e && (e.statusCode || e.status);
+      if (code === 404 || code === 410) { try { run('DELETE FROM push_subscriptions WHERE endpoint=?', s.endpoint); } catch {} }
+    }
+  }
+  return sent;
+}
+
 // ------------------------- helpers -------------------------
 const str = v => String(v ?? '').trim();
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -630,6 +670,37 @@ add('POST', '/api/reviews', ({ body, req }) => {
 // الأسئلة الشائعة — عامة
 add('GET', '/api/faqs', () => ({ items: all('SELECT id, question, answer FROM faqs WHERE active=1 ORDER BY id') }));
 
+// ------------------------- إشعارات التطبيق + الاشتراك بالدفع -------------------------
+add('GET', '/api/notifications', ({ query }) => {
+  const limit = Math.min(60, Math.max(1, num(query.get('limit') || 40)));
+  const items = all(`SELECT id, title, message, created_at FROM notifications
+    WHERE platform IN ('app','all') ORDER BY id DESC LIMIT ${limit}`);
+  return { items };
+});
+add('GET', '/api/push/vapid-public-key', () => {
+  ensureVapid();
+  return { publicKey: getSettings().vapid_public_key || '' };
+});
+add('POST', '/api/push/subscribe', ({ body }) => {
+  const sub = body && body.subscription ? body.subscription : body;
+  const endpoint = str(sub && sub.endpoint);
+  const p256dh = str(sub && sub.keys && sub.keys.p256dh);
+  const auth = str(sub && sub.keys && sub.keys.auth);
+  if (!endpoint || !/^https:\/\//.test(endpoint) || !p256dh || !auth) {
+    return { status: 400, body: { error: 'بيانات الاشتراك غير صحيحة' } };
+  }
+  run(`INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_agent, created_at) VALUES (?,?,?,?,?)
+    ON CONFLICT(endpoint) DO UPDATE SET p256dh=excluded.p256dh, auth=excluded.auth, created_at=excluded.created_at`,
+    endpoint, p256dh.slice(0, 500), auth.slice(0, 500), str(body && body.user_agent).slice(0, 300), now());
+  return { ok: true, subscribers: get('SELECT COUNT(*) AS n FROM push_subscriptions').n };
+});
+add('POST', '/api/push/unsubscribe', ({ body }) => {
+  const endpoint = str(body && body.endpoint);
+  if (endpoint) run('DELETE FROM push_subscriptions WHERE endpoint=?', endpoint);
+  return { ok: true };
+});
+add('GET', '/api/push/status', () => ({ ok: true, subscribers: get('SELECT COUNT(*) AS n FROM push_subscriptions').n, enabled: !!webPush }));
+
 // تتبع الطلب — عامة (بمطابقة رقم الجوال)
 add('GET', '/api/orders/track', ({ query }) => {
   const id = num(query.get('id'));
@@ -688,9 +759,16 @@ add('POST', '/api/admin/notify', async ({ body }) => {
     try { const r = await platformSend(t.platform, t.psid, full); if (r && r.ok) sent++; else failed++; }
     catch { failed++; }
   }
+  // إشعار التطبيق + إشعار الهاتف (Web Push) — يصل حتى إن كان التطبيق مغلقاً
+  let pushSent = 0;
+  if (platform === 'app' || platform === 'all') {
+    try { pushSent = await pushToAll(title || 'تنبيه جديد', message, '/'); }
+    catch (e) { console.error('[push] فشل:', e.message); }
+    sent += pushSent;
+  }
   const info = run('INSERT INTO notifications (title,message,platform,target,sent,failed,created_at) VALUES (?,?,?,?,?,?,?)',
     title, message, platform, str(body.psid) || 'all', sent, failed, now());
-  return { ok: true, id: Number(info.lastInsertRowid), targets: targets.length, sent, failed };
+  return { ok: true, id: Number(info.lastInsertRowid), targets: targets.length, sent, failed, pushSent };
 }, { auth: true });
 
 add('GET', '/api/admin/reviews', () => ({ items: all('SELECT * FROM reviews ORDER BY id DESC LIMIT 200') }), { auth: true });
@@ -705,10 +783,10 @@ add('DELETE', '/api/admin/reviews/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
-const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'welcome', 'welcome_messenger', 'welcome_whatsapp', 'custom_instructions', 'reply_language', 'ai_temperature', 'ai_max_tokens', 'footer_text', 'bot_tone', 'ads_in_chat', 'ads_enabled', 'app_link'];
+const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'welcome', 'welcome_messenger', 'welcome_whatsapp', 'custom_instructions', 'reply_language', 'ai_temperature', 'ai_max_tokens', 'footer_text', 'bot_tone', 'ads_in_chat', 'ads_enabled', 'app_link', 'vapid_public_key', 'vapid_private_key'];
 add('GET', '/api/admin/settings', () => {
   const s = getSettings();
-  const out = {}; SETTING_KEYS.forEach(k => out[k] = s[k] ?? '');
+  const out = {}; SETTING_KEYS.forEach(k => { if (k !== 'vapid_private_key') out[k] = s[k] ?? ''; });
   const wa = waCredentials();
   return { settings: out, runtime: {
     gemini: !!config.GEMINI_API_KEY, model: config.GEMINI_MODEL,
@@ -989,7 +1067,7 @@ add('GET', '/api/admin/system-status', () => {
   };
 }, { auth: true });
 
-const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes', 'ads', 'replies', 'post_rules', 'notifications'];
+const BACKUP_TABLES = ['categories', 'products', 'orders', 'conversations', 'messages', 'faqs', 'customers', 'otp_codes', 'ads', 'replies', 'post_rules', 'notifications', 'push_subscriptions'];
 add('GET', '/api/admin/backup', () => {
   const out = { version: 1, exported_at: now() };
   for (const t of BACKUP_TABLES) out[t] = all(`SELECT * FROM ${t}`);
