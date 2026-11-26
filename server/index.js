@@ -535,20 +535,65 @@ add('POST', '/api/admin/test-whatsapp', async () => {
 }, { auth: true });
 
 add('POST', '/api/admin/test-messenger', async () => {
-  const token = getSettings().messenger_page_token || config.MESSENGER_PAGE_TOKEN;
-  if (!token) return { status: 400, body: { error: 'أضف Page Token أولاً' } };
+  const s = getSettings();
+  const token = s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token;
+  if (!token) return { status: 400, body: { error: 'أضف Page Token أولاً من إعدادات المسنجر' } };
   try {
-    const url = `https://graph.facebook.com/${config.GRAPH_API_VERSION}/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(token)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    const data = await res.json();
-    if (!res.ok || !data.data?.is_valid) return { status: 400, body: { error: data.error?.message || 'التوكن غير صالح' } };
-    return { ok: true, type: data.data.type, pageId: data.data.profile_id || '' };
+    // تحقق من التوكن
+    const dbg = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(15000) }).then(r => r.json());
+    if (!dbg.data?.is_valid) return { status: 400, body: { error: dbg.error?.message || dbg.data?.error?.message || 'التوكن غير صالح أو منتهي' } };
+    const pageId = dbg.data.profile_id || s.messenger_page_id || s.facebook_page_id || '';
+    // جلب معلومات الصفحة
+    let page = {};
+    if (pageId) {
+      page = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/${pageId}?fields=id,name,link&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(15000) }).then(r => r.json()).catch(() => ({}));
+    } else {
+      page = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/me?fields=id,name,link&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(15000) }).then(r => r.json()).catch(() => ({}));
+    }
+    const resolvedId = page.id || pageId;
+    if (resolvedId) {
+      setSetting('messenger_page_id', resolvedId);
+      if (!s.facebook_page_id) setSetting('facebook_page_id', resolvedId);
+    }
+    // فحص الاشتراكات
+    let subs = null;
+    if (resolvedId) {
+      subs = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/${resolvedId}/subscribed_apps?access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(15000) }).then(r => r.json()).catch(() => null);
+    }
+    return { ok: true, type: dbg.data.type, pageId: resolvedId, name: page.name || '', link: page.link || '', scopes: dbg.data.scopes || [], subscribed: subs?.data || null };
   } catch (e) { return { status: 400, body: { error: e.message } }; }
 }, { auth: true });
 
-add('GET', '/api/admin/page-status', () => ({
-  s: (() => { const x = getSettings(); return { pageId: x.facebook_page_id || config.FACEBOOK_PAGE_ID, name: '', token: !!(x.facebook_page_token || config.FACEBOOK_PAGE_TOKEN) }; })(),
-}), { auth: true });
+add('POST', '/api/admin/subscribe-messenger', async () => {
+  const s = getSettings();
+  const token = s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token;
+  if (!token) return { status: 400, body: { error: 'أضف Page Token أولاً' } };
+  const pageId = s.messenger_page_id || s.facebook_page_id || config.FACEBOOK_PAGE_ID;
+  if (!pageId) return { status: 400, body: { error: 'معرف الصفحة غير معروف — اضغط "تحقق من توكن مسنجر" أولاً' } };
+  try {
+    const url = `https://graph.facebook.com/${config.GRAPH_API_VERSION}/${pageId}/subscribed_apps`;
+    const baseFields = 'messages,messaging_postbacks,messaging_optins,message_deliveries,message_reads';
+    const res = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ access_token: token, subscribed_fields: baseFields }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { status: 400, body: { error: data?.error?.message || `HTTP ${res.status}`, raw: data } };
+    // جرّب اشتراك feed بشكل منفصل (يتطلب pages_manage_metadata) — لا تفشل العملية إن لم تتوفر الصلاحية
+    let feed = null;
+    try {
+      const fr = await fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ access_token: token, subscribed_fields: baseFields + ',feed' }),
+        signal: AbortSignal.timeout(15000),
+      });
+      feed = await fr.json().catch(() => ({}));
+      if (fr.ok) return { ok: true, result: feed, feed: true };
+    } catch {}
+    return { ok: true, result: data, feed: false, feedWarning: feed?.error?.message || 'اشتراك feed لم يتفعّل (يتطلب pages_manage_metadata) — رسائل المسنجر مفعّلة.' };
+  } catch (e) { return { status: 400, body: { error: e.message } }; }
+}, { auth: true });
 
 add('POST', '/api/admin/change-page', async ({ body }) => {
   const token = str(body.token);

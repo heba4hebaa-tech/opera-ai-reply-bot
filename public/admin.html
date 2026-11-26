@@ -152,7 +152,8 @@
           <h3 class="card-title">💬 إعدادات مسنجر والصفحة</h3>
           <div class="form-row two"><div><label>Page Access Token</label><input id="set_messenger_page_token" type="password" placeholder="اتركه فارغاً لاستخدام التوكن في .env"></div>
           <div><label>معرف الصفحة (لرابط m.me)</label><input id="set_messenger_page_id" placeholder="رقم صفحة فيسبوك"></div></div>
-          <div class="row"><button class="btn btn-ghost btn-sm" id="testMessenger">🔍 تحقق من توكن مسنجر</button><span id="msTestResult" class="small muted"></span></div>
+          <div class="row"><button class="btn btn-ghost btn-sm" id="testMessenger">🔍 تحقق من توكن مسنجر</button><button class="btn btn-primary btn-sm" id="subscribeMessenger" style="margin-left:8px;">🔔 تفعيل استقبال الرسائل</button><span id="msTestResult" class="small muted"></span></div>
+          <div class="small muted" style="margin-top:8px;">عنوان Webhook في Meta: <code id="msWebhookUrl"></code> | رمز التحقق: <code>opera-ai-verify-token</code> (أو قيمة VERIFY_TOKEN في .env)</div>
           <p class="small muted">لتغيير الصفحة: أنشئ Page Token للصفحة الجديدة في Meta Developers، الصقه هنا واضغط حفظ — الردود تتحول فوراً. Webhook يجب أن يكون مشتركاً لتلك الصفحة.</p>
         </div>
         <div class="card" style="margin-top:18px;">

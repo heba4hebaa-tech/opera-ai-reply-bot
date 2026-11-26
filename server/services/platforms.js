@@ -46,28 +46,34 @@ async function sendWhatsApp(to, text) {
   }
 }
 
-async function sendMessenger(psid, text) {
+async function sendMessenger(psid, text, messagingType = 'RESPONSE') {
   const s = getSettings();
   const token = s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token;
   if (!token) {
     return { ok: false, skipped: true, error: 'المسنجر غير مُعدّ — أضف Page Token من الإعدادات' };
   }
+  const psidStr = String(psid || '');
+  if (!psidStr) return { ok: false, error: 'PSID ناقص — لا يمكن إرسال الرسالة' };
+  // إرسال عبر مسار الصفحة المحدد (page-scoped) إن وُجد، وإلا عبر /me (صفحة token)
+  const pageId = s.messenger_page_id || s.facebook_page_id || '';
+  const endpoint = pageId ? `${pageId}/messages` : 'me/messages';
+  const url = `https://graph.facebook.com/${config.GRAPH_API_VERSION}/${endpoint}?access_token=${encodeURIComponent(token)}`;
   try {
-    const url = `https://graph.facebook.com/${config.GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(token)}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        recipient: { id: psid },
+        recipient: { id: psidStr },
+        messaging_type: messagingType,
         message: { text: String(text).slice(0, 1900) },
-        messaging_type: 'RESPONSE',
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(20000),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      console.error('[Messenger] send failed:', res.status, JSON.stringify(data).slice(0, 400));
-      return { ok: false, error: data?.error?.message || `HTTP ${res.status}` };
+      const errMsg = data?.error?.message || `HTTP ${res.status}`;
+      console.error('[Messenger] send failed:', res.status, JSON.stringify(data).slice(0, 600));
+      return { ok: false, error: errMsg, fullError: data };
     }
     return { ok: true, id: data.message_id };
   } catch (e) {
@@ -100,19 +106,23 @@ async function sendOptions(platform, to, text, buttons = ['عرض المنتجا
   }
   if (platform === 'messenger') {
     const s = getSettings();
-    const token = s.messenger_page_token || config.MESSENGER_PAGE_TOKEN;
-    if (!token) return { ok: false };
+    const token = s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token;
+    if (!token) return { ok: false, error: 'المسنجر غير مُعدّ' };
+    const pageId = s.messenger_page_id || s.facebook_page_id || '';
+    const endpoint = pageId ? `${pageId}/messages` : 'me/messages';
     try {
-      const res = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/me/messages?access_token=${encodeURIComponent(token)}`, {
+      const res = await fetch(`https://graph.facebook.com/${config.GRAPH_API_VERSION}/${endpoint}?access_token=${encodeURIComponent(token)}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipient: { id: to }, messaging_type: 'RESPONSE', message: {
+        body: JSON.stringify({ recipient: { id: String(to) }, messaging_type: 'RESPONSE', message: {
           text: String(text).slice(0, 180),
-          quick_replies: buttons.slice(0, 3).map(b => ({ content_type: 'text', title: b.slice(0, 20), payload: b })),
+          quick_replies: buttons.slice(0, 3).map(b => ({ content_type: 'text', title: b.slice(0, 20), payload: String(b).slice(0, 24) })),
         } }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(20000),
       });
-      return { ok: res.ok };
-    } catch { return { ok: false }; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data?.error?.message || `HTTP ${res.status}` };
+      return { ok: true, id: data.message_id };
+    } catch (e) { return { ok: false, error: e.message }; }
   }
   return { ok: false };
 }

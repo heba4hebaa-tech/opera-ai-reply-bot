@@ -361,6 +361,7 @@
     const r = d.runtime;
     $('runtimeInfo').innerHTML = `<span class="pill ${r.gemini ? 'ok' : 'warn'}">${r.gemini ? esc(r.model) : 'Gemini غير مفعّل'}</span>
       <span class="pill ${r.whatsapp ? 'ok' : 'warn'}">واتساب</span><span class="pill ${r.messenger ? 'ok' : 'warn'}">مسنجر</span>`;
+    const msHook = $('msWebhookUrl'); if (msHook) msHook.textContent = location.origin + '/webhooks/messenger';
   }
 
   $('saveSettings').onclick = async () => {
@@ -418,7 +419,17 @@
     const out = $('msTestResult');
     out.textContent = 'جارٍ التحقق...';
     const r = await api('/api/admin/test-messenger', { method: 'POST', body: {} });
-    out.textContent = r.ok ? `✅ صفحة ${r.pageId || ''} (${r.type})` : '❌ ' + (r.error || 'تعذر التحقق');
+    if (r.ok) {
+      const subs = r.subscribed ? ` | اشتراكات: ${(r.subscribed[0]?.subscribed_fields||[]).join(', ') || 'لا يوجد'}` : '';
+      out.textContent = `✅ ${r.name || ''} (${r.pageId || ''})${subs}`;
+    } else out.textContent = '❌ ' + (r.error || 'تعذر التحقق');
+  };
+  const subBtn = $('subscribeMessenger');
+  if (subBtn) subBtn.onclick = async () => {
+    const out = $('msTestResult');
+    out.textContent = 'جارٍ تفعيل الاشتراك...';
+    const r = await api('/api/admin/subscribe-messenger', { method: 'POST', body: {} });
+    out.textContent = r.ok ? '✅ تم تفعيل اشتراكات المسنجر (messages, feed...)' : '❌ ' + (r.error || 'فشل الاشتراك');
   };
 
   $('backupBtn').onclick = async () => {
