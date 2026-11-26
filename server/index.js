@@ -282,12 +282,12 @@ add('POST', '/api/customer/send-code', async ({ body }) => {
   run('UPDATE otp_codes SET used=1 WHERE phone=? AND used=0', phone);
   const code = String(crypto.randomInt(100000, 999999));
   run('INSERT INTO otp_codes (phone, code, expires_at, used, created_at) VALUES (?,?,?,0,?)', phone, code, Date.now() + 10 * 60 * 1000, now());
-  // إرسال رمز التحقق عبر واتساب. إن لم يكن واتساب مُعدّاً، يُعاد الرمز للتطوير (demoCode) بصدق.
+  // إرسال رمز التحقق عبر واتساب (صيغة E.164 الصحيحة: +218945343522)
   let waSent = { ok: false };
   try {
     const { token, phoneId } = waCredentials();
     if (token && phoneId) {
-      const to = phone.replace(/\D/g, '');
+      const to = phone.startsWith('+') ? phone : `+${phone.replace(/\D/g, '')}`;
       waSent = await sendWhatsApp(to, `رمز التحقق الخاص بك في ${getSettings().business_name || 'التطبيق'}: ${code}\nصالح لمدة 10 دقائق.`);
     }
   } catch (e) { console.error('[OTP WhatsApp]', e.message); }

@@ -19,13 +19,21 @@
     state.products = prods.items || [];
     state.customer = me.customer || null;
     state.ads = ads.items || [];
-    renderInfo(); renderChips(); renderProducts(); renderCustomer(); renderAds(); wireSearch(); wireScroll();
+    renderInfo(); renderChips(); renderProducts(); renderCustomer(); renderAds(); wireSearch(); wireScroll(); wireAppNav();
   }
 
   function wireScroll() {
     const h = document.querySelector('.site-header');
     const on = () => h && h.classList.toggle('scrolled', window.scrollY > 12);
     window.addEventListener('scroll', on, { passive: true }); on();
+  }
+  // تنقّل تطبيقي زبوني سفلي (الرئيسية / المتجر / السلة / الدردشة)
+  function wireAppNav() {
+    const home = $('appNavHome'), store = $('appNavStore'), cart = $('appNavCart'), chat = $('appNavChat');
+    if (home) home.onclick = () => document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' });
+    if (store) store.onclick = () => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
+    if (cart) cart.onclick = () => openCart();
+    if (chat) chat.onclick = () => assistantInfo();
   }
   function wireSearch() {
     const inp = $('searchInput');
