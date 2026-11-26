@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const config = require('./config');
 const { all, get, run, now, getSettings, setSetting, hashPassword, verifyPassword } = require('./db');
 const { handleIncoming, generateReply } = require('./services/chat');
-const { credentials: waCredentials } = require('./services/platforms');
+const { credentials: waCredentials, sendWhatsApp } = require('./services/platforms');
 const { creds: fbCreds, sendPagePost, replyPost, replyComment, graph: fbGraph } = require('./services/facebook');
 const poller = require('./services/poller');
 
@@ -233,7 +233,7 @@ add('POST', '/api/store/orders', ({ body, customer }) => {
   const fee = method === 'توصيل للمنزل' && subtotal < num(s2.delivery_free_threshold) ? num(s2.delivery_fee) : 0;
   const total = subtotal + fee;
   const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, latitude, longitude, delivery_fee, delivery_method, paid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    name.slice(0, 120), phone.slice(0, 40), str(body.address).slice(0, 300), str(body.notes).slice(0, 500),
+    name.slice(0, 120), normalizePhone(phone).slice(0, 40) || phone.slice(0, 40), str(body.address).slice(0, 300), str(body.notes).slice(0, 500),
     JSON.stringify(clean), total, 'جديد', 'المتجر', now(), customer?.id || 0,
     num(customer?.latitude || body.latitude), num(customer?.longitude || body.longitude), fee, method, 0);
   for (const i of clean) { if (i.id > 0) run('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?', i.qty, i.id); }
@@ -262,21 +262,36 @@ add('POST', '/api/auth/logout', ({ res }) => {
 add('GET', '/api/auth/me', ({ user }) => ({ user }));
 
 // ------------------------- customer login (OTP) -------------------------
+// تطبيع الجوال — ليبيا افتراضياً: يقبل 09xxxxxxxxx, 9xxxxxxxx, 2189xxxxxxxxx, 00218..., +218...
 function normalizePhone(v) {
-  let p = str(v).replace(/[^\d+]/g, '');
-  if (p.startsWith('00')) p = '+' + p.slice(2);
-  else if (/^0\d{9}$/.test(p)) p = '+218' + p.slice(1);
-  else if (!p.startsWith('+')) p = '+' + p;
-  return p;
+  let d = str(v).replace(/[^\d+]/g, '');
+  if (d.startsWith('00')) d = '+' + d.slice(2);
+  d = d.replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('00218')) d = d.slice(3);       // 00218xxxxxxxxx → 218xxxxxxxxx
+  if (d.startsWith('218')) { /* رقم مع مفتاح ليبيا */ }
+  else if (d.startsWith('0')) d = '218' + d.slice(1); // 09xxxxxxxxx → 2189xxxxxxxxx
+  else if (d.length <= 9) d = '218' + d;               // 9xxxxxxxx → 2189xxxxxxxxx
+  // إزالة تكرار 218
+  if (d.startsWith('218218')) d = d.slice(3);
+  return '+' + d;
 }
-add('POST', '/api/customer/send-code', ({ body }) => {
+add('POST', '/api/customer/send-code', async ({ body }) => {
   const phone = normalizePhone(body.phone);
   if (phone.replace(/\D/g, '').length < 8) return { status: 400, body: { error: 'رقم الجوال غير صالح' } };
   run('UPDATE otp_codes SET used=1 WHERE phone=? AND used=0', phone);
   const code = String(crypto.randomInt(100000, 999999));
   run('INSERT INTO otp_codes (phone, code, expires_at, used, created_at) VALUES (?,?,?,0,?)', phone, code, Date.now() + 10 * 60 * 1000, now());
-  // لا يوجد مزوّد SMS مجاني: الرمز يظهر هنا للمطوّر وللأدمن في «طلبات التحقق»
-  return { ok: true, demoCode: code, phone };
+  // إرسال رمز التحقق عبر واتساب. إن لم يكن واتساب مُعدّاً، يُعاد الرمز للتطوير (demoCode) بصدق.
+  let waSent = { ok: false };
+  try {
+    const { token, phoneId } = waCredentials();
+    if (token && phoneId) {
+      const to = phone.replace(/\D/g, '');
+      waSent = await sendWhatsApp(to, `رمز التحقق الخاص بك في ${getSettings().business_name || 'التطبيق'}: ${code}\nصالح لمدة 10 دقائق.`);
+    }
+  } catch (e) { console.error('[OTP WhatsApp]', e.message); }
+  return { ok: true, phone, sentWhatsApp: !!waSent.ok, ...(waSent.ok ? {} : { demoCode: code, note: 'واتساب غير مُعدّ أو التوكن منتهي — الرمز معروض هنا للتحقق' }) };
 });
 add('POST', '/api/customer/verify', ({ body, res }) => {
   const phone = normalizePhone(body.phone);
@@ -524,6 +539,36 @@ add('DELETE', '/api/admin/faqs/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
+// ------------------------- custom replies -------------------------
+add('GET', '/api/admin/replies', () => ({ items: all('SELECT * FROM replies ORDER BY priority DESC, id DESC') }), { auth: true });
+add('POST', '/api/admin/replies', ({ body }) => {
+  if (!str(body.keyword) || !str(body.answer)) return { status: 400, body: { error: 'الكلمة المفتاحية والرد مطلوبان' } };
+  const info = run('INSERT INTO replies (keyword,answer,match_type,channel,priority,active,created_at) VALUES (?,?,?,?,?,?,?)',
+    str(body.keyword), str(body.answer), str(body.match_type || 'contains'), str(body.channel || 'all'), num(body.priority), body.active === false ? 0 : 1, now());
+  return { ok: true, id: Number(info.lastInsertRowid) };
+}, { auth: true });
+add('PUT', '/api/admin/replies/:id', ({ params, body }) => {
+  run('UPDATE replies SET keyword=?,answer=?,match_type=?,channel=?,priority=?,active=? WHERE id=?',
+    str(body.keyword), str(body.answer), str(body.match_type || 'contains'), str(body.channel || 'all'), num(body.priority), body.active === false ? 0 : 1, num(params.id));
+  return { ok: true };
+}, { auth: true });
+add('DELETE', '/api/admin/replies/:id', ({ params }) => { run('DELETE FROM replies WHERE id=?', num(params.id)); return { ok: true }; }, { auth: true });
+
+// ------------------------- post rules (ردود لكل منشور) -------------------------
+add('GET', '/api/admin/post-rules', () => ({ items: all('SELECT * FROM post_rules ORDER BY id DESC') }), { auth: true });
+add('POST', '/api/admin/post-rules', ({ body }) => {
+  if (!str(body.post_id) || !str(body.answer)) return { status: 400, body: { error: 'معرّف المنشور والرد مطلوبان' } };
+  const info = run('INSERT INTO post_rules (post_id,keyword,answer,reply_comment,notify_admin,active,created_at) VALUES (?,?,?,?,?,?,?)',
+    str(body.post_id), str(body.keyword), str(body.answer), body.reply_comment === false ? 0 : 1, body.notify_admin === false ? 0 : 1, body.active === false ? 0 : 1, now());
+  return { ok: true, id: Number(info.lastInsertRowid) };
+}, { auth: true });
+add('PUT', '/api/admin/post-rules/:id', ({ params, body }) => {
+  run('UPDATE post_rules SET post_id=?,keyword=?,answer=?,reply_comment=?,notify_admin=?,active=? WHERE id=?',
+    str(body.post_id), str(body.keyword), str(body.answer), body.reply_comment === false ? 0 : 1, body.notify_admin === false ? 0 : 1, body.active === false ? 0 : 1, num(params.id));
+  return { ok: true };
+}, { auth: true });
+add('DELETE', '/api/admin/post-rules/:id', ({ params }) => { run('DELETE FROM post_rules WHERE id=?', num(params.id)); return { ok: true }; }, { auth: true });
+
 // ------------------------- ads -------------------------
 function activeAds(placement) {
   const s = getSettings();
@@ -560,6 +605,32 @@ add('DELETE', '/api/admin/ads/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
+// ------------------------- notifications / broadcast -------------------------
+const { send: platformSend } = require('./services/platforms');
+add('GET', '/api/admin/notifications', () => ({ items: all('SELECT * FROM notifications ORDER BY id DESC LIMIT 50') }), { auth: true });
+add('POST', '/api/admin/notify', async ({ body }) => {
+  const message = str(body.message);
+  if (!message) return { status: 400, body: { error: 'نص التنبيه مطلوب' } };
+  const platform = str(body.platform || 'all');
+  const title = str(body.title || '');
+  const full = title ? `${title}\n\n${message}` : message;
+  let targets;
+  if (str(body.psid)) targets = [{ platform: str(body.platform === 'whatsapp' ? 'whatsapp' : 'messenger'), psid: str(body.psid) }];
+  else {
+    const rows = all(`SELECT platform, psid FROM conversations WHERE psid != ''`);
+    targets = rows.filter(r => r.platform === 'messenger' || r.platform === 'whatsapp')
+      .filter(r => platform === 'all' || r.platform === platform);
+  }
+  let sent = 0, failed = 0;
+  for (const t of targets) {
+    try { const r = await platformSend(t.platform, t.psid, full); if (r && r.ok) sent++; else failed++; }
+    catch { failed++; }
+  }
+  const info = run('INSERT INTO notifications (title,message,platform,target,sent,failed,created_at) VALUES (?,?,?,?,?,?,?)',
+    title, message, platform, str(body.psid) || 'all', sent, failed, now());
+  return { ok: true, id: Number(info.lastInsertRowid), targets: targets.length, sent, failed };
+}, { auth: true });
+
 add('GET', '/api/admin/reviews', () => ({ items: all('SELECT * FROM reviews ORDER BY id DESC LIMIT 200') }), { auth: true });
 add('POST', '/api/admin/reviews', ({ body }) => {
   const pid = Number(body.product_id);
@@ -572,7 +643,7 @@ add('DELETE', '/api/admin/reviews/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
-const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'welcome', 'welcome_messenger', 'welcome_whatsapp', 'custom_instructions', 'reply_language', 'ai_temperature', 'ai_max_tokens', 'footer_text', 'bot_tone', 'ads_in_chat', 'ads_enabled'];
+const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'welcome', 'welcome_messenger', 'welcome_whatsapp', 'custom_instructions', 'reply_language', 'ai_temperature', 'ai_max_tokens', 'footer_text', 'bot_tone', 'ads_in_chat', 'ads_enabled', 'app_link'];
 add('GET', '/api/admin/settings', () => {
   const s = getSettings();
   const out = {}; SETTING_KEYS.forEach(k => out[k] = s[k] ?? '');
@@ -887,6 +958,33 @@ add('POST', '/api/admin/restore', ({ body }) => {
 }, { auth: true });
 
 // ------------------------- webhooks -------------------------
+// اختيار رد لتعليق منشور: قاعدة لكل منشور (post_rules) → كلمة مفتاحية → رد ذكي عام
+async function pickPostReply(postId, messageText, pageId) {
+  const msg = String(messageText || '').toLowerCase();
+  let rules = [];
+  try { rules = all('SELECT * FROM post_rules WHERE active = 1 AND post_id = ? ORDER BY id DESC', String(postId)); } catch {}
+  // قواعد عامة لكل المنشورات
+  let globalRules = [];
+  try { globalRules = all("SELECT * FROM post_rules WHERE active = 1 AND post_id IN ('*','all','') ORDER BY id DESC"); } catch {}
+  for (const r of [...rules, ...globalRules]) {
+    const kw = String(r.keyword || '').toLowerCase().trim();
+    if (!kw || msg.includes(kw)) {
+      return { text: String(r.answer || '').replace(/\{business\}/g, getSettings().business_name || 'متجرنا'), replyComment: r.reply_comment !== 0, notifyAdmin: r.notify_admin !== 0 };
+    }
+  }
+  // رد ذكي عام على التعليق
+  let ai = '';
+  try { ai = await generateReply(messageText || 'تعليق على المنشور', [], null, 'messenger'); } catch {}
+  const fallback = `أهلاً بك 👋 سنردّ عليك هنا أو راسلنا في المسنجر، وتجد كل شيء في تطبيقنا.`;
+  return { text: ai || fallback, replyComment: true, notifyAdmin: true };
+}
+function notifyAdminFbComment(postId, fromId, messageText, commentId) {
+  try {
+    run('INSERT INTO notifications (title,message,platform,target,sent,failed,created_at) VALUES (?,?,?,?,?,?,?)',
+      'تعليق جديد على منشور', `المنشور: ${postId}\nالمعلّق: ${fromId}\nالنص: ${String(messageText || '').slice(0, 300)}\ncomment_id: ${commentId}`,
+      'messenger', postId, 0, 0, now());
+  } catch {}
+}
 function webhookVerify({ query, res }) {
   const mode = str(query.get('hub.mode'));
   const token = str(query.get('hub.verify_token'));
@@ -1007,6 +1105,26 @@ add('POST', '/webhooks/messenger', async ({ req, raw, body, res }) => {
   run('INSERT INTO webhook_events (platform, payload, created_at) VALUES (?,?,?)', 'meta', JSON.stringify(body).slice(0, 20000), now());
   const jobs = [];
   for (const entry of body.entry || []) {
+    const pageId = fbCreds().pageId;
+    // ردود على المنشورات (feed): تعليقات الزبائن على الصفحة + ردود لكل منشور
+    for (const change of entry.changes || []) {
+      const v = change.value || {};
+      const isFeed = change.field === 'feed' || v.item === 'comment' || v.verb === 'add';
+      const commentId = str(v.comment_id || v.id || v.feedback_id);
+      const postId = str(v.post_id || v.parent_id || (v.post && v.post.id) || v.object_id);
+      const fromId = str(v.from?.id || v.sender_id);
+      const messageText = str(v.message || v.text || v.comment || v.story);
+      if (!isFeed || !commentId) continue;
+      if (fromId && fromId === String(pageId)) continue; // تجاهل تعليقات الصفحة نفسها
+      if (v.verb && v.verb !== 'add' && v.verb !== 'edited') continue;
+      if (get('SELECT 1 FROM messages WHERE external_id = ? LIMIT 1', `fbcomment:${commentId}`)) continue;
+      jobs.push((async () => {
+        try { run('INSERT INTO messages (conversation_id, direction, text, external_id, created_at) VALUES (?,?,?,?,?)', 0, 'in', messageText, `fbcomment:${commentId}`, now()); } catch {}
+        const reply = await pickPostReply(postId, messageText, pageId);
+        if (reply.replyComment) { try { await replyComment(commentId, reply.text); } catch (e) { console.error('[FB comment reply]', e.message); } }
+        if (reply.notifyAdmin) notifyAdminFbComment(postId, fromId, messageText, commentId);
+      })());
+    }
     for (const ev of entry.messaging || []) {
       if (ev.message?.is_echo) continue;
       const messageText = ev.message?.text || ev.postback?.payload || ev.message?.quick_reply?.payload ||

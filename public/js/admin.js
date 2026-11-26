@@ -475,7 +475,7 @@
   }
 
   $('saveSettings').onclick = async () => {
-    const keys = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'welcome', 'welcome_messenger', 'welcome_whatsapp', 'custom_instructions', 'reply_language', 'ai_temperature', 'ai_max_tokens', 'footer_text', 'bot_tone', 'ads_enabled', 'ads_in_chat'];
+    const keys = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'app_link', 'ai_enabled', 'greeting', 'welcome', 'welcome_messenger', 'welcome_whatsapp', 'custom_instructions', 'reply_language', 'ai_temperature', 'ai_max_tokens', 'footer_text', 'bot_tone', 'ads_enabled', 'ads_in_chat'];
     const payload = {};
     for (const k of keys) {
       const el = $('set_' + k);

@@ -354,7 +354,7 @@
     if (window.__mapModal) window.__mapModal.close();
     const m = modal('اختر موقعك على الخريطة 🗺️', `<div id="mapDiv" style="height:340px;border-radius:12px;overflow:hidden;background:#e8eef4;"></div>
       <p class="small muted">اضغط على الخريطة لاختيار نقطة، أو استخدم زر «موقعي تلقائياً».</p>
-      <div class="modal-foot"><button class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary" id="pickLocation">استخدام هذه النقطة</button></div>`, { wide: true });
+      <div class="modal-foot"><button class="btn btn-ghost" data-close>إلغاء</button><button type="button" class="btn btn-outline" id="geoAuto">📍 موقعي تلقائياً (دقيق)</button><button class="btn btn-primary" id="pickLocation">استخدام هذه النقطة</button></div>`, { wide: true });
     window.__mapModal = m;
     const latEl = $('pf_lat') || $('co_lat') || document.createElement('input');
     const lngEl = $('pf_lng') || $('co_lng') || document.createElement('input');
@@ -383,6 +383,19 @@
       } catch {}
       window.__map = null; m.close(); toast('تم تحديد الموقع ✓');
     };
+    // تحديد موقع دقيق تلقائياً بالـ GPS
+    m.el.querySelector('#geoAuto')?.addEventListener('click', () => {
+      if (!navigator.geolocation) { toast('المتصفح لا يدعم تحديد الموقع', true); return; }
+      toast('جارٍ تحديد موقعك بدقة...');
+      navigator.geolocation.getCurrentPosition(pos => {
+        lat = pos.coords.latitude; lng = pos.coords.longitude;
+        latEl.value = lat; lngEl.value = lng;
+        if (marker) marker.setLatLng([lat, lng]);
+        if (window.__map) window.__map.setView([lat, lng], 16);
+        if (coordsEl) coordsEl.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        toast(`تم تحديد موقعك بدقة (±${Math.round(pos.coords.accuracy || 0)}م) ✓`);
+      }, () => toast('تعذر الحصول على الموقع — فعّل الـ GPS وأذن المتصفح', true), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    });
   }
 
   // ------------------------- checkout -------------------------
@@ -398,7 +411,7 @@
       <div class="form-row two"><div><label>المدينة</label><input id="co_city" value="${esc(c.city || '')}"></div>
       <div><label>الدولة</label><input value="${esc(state.info.country || 'ليبيا')}" readonly></div></div>
       <div class="form-row"><label>العنوان</label><input id="co_address" value="${esc(c.address || '')}"></div>
-      <div class="row"><button type="button" class="btn btn-ghost btn-sm" id="coMap">🗺️ تعديل الموقع</button>
+      <div class="row"><button type="button" class="btn btn-ghost btn-sm" id="coMap">🗺️ تعديل الموقع</button><button type="button" class="btn btn-ghost btn-sm" id="coGeo">📍 تحديد موقعي بدقة</button>
       <span class="small muted" id="coCoords">${c.latitude ? `${Number(c.latitude).toFixed(4)}, ${Number(c.longitude).toFixed(4)}` : 'بدون موقع'}</span></div>
       <input type="hidden" id="co_lat" value="${c.latitude || 0}"><input type="hidden" id="co_lng" value="${c.longitude || 0}">
       <div class="form-row two"><div><label>طريقة التوصيل</label><select id="co_method">${(state.info.deliveryMethods || ['توصيل للمنزل', 'استلام من المتجر']).map(m => `<option>${esc(m)}</option>`).join('')}</select></div>
@@ -412,6 +425,16 @@
       <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary" type="submit">تأكيد الطلب</button></div>
     </form>`);
     m.el.querySelector('#coMap').onclick = () => mapModal();
+    m.el.querySelector('#coGeo')?.addEventListener('click', () => {
+      if (!navigator.geolocation) { toast('المتصفح لا يدعم تحديد الموقع', true); return; }
+      toast('جارٍ تحديد موقعك بدقة...');
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude, longitude } = pos.coords;
+        $('co_lat').value = latitude; $('co_lng').value = longitude;
+        $('coCoords').textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+        toast(`تم تحديد موقعك بدقة (±${Math.round(pos.coords.accuracy || 0)}م) ✓`);
+      }, () => toast('تعذر الحصول على الموقع — فعّل الـ GPS', true), { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    });
     m.el.querySelector('#checkoutForm').addEventListener('submit', async e => {
       e.preventDefault();
       const btn = e.target.querySelector('[type=submit]'); btn.disabled = true; btn.textContent = '...';

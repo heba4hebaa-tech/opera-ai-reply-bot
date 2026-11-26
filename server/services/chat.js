@@ -18,9 +18,19 @@ function exactCommand(text) {
   return null;
 }
 
-async function generateReply(text, history, image) {
+async function generateReply(text, history, image, platform = '') {
   const s = getSettings();
   const mm = stripTashkeel(text);
+  // 1) ردود مخصصة (كلمات مفتاحية، أولوية، لكل قناة) — تتقدّم على الذكاء الاصطناعي
+  const custom = customReply(mm, platform);
+  if (custom) return custom;
+  // 2) طلب رابط التطبيق/المتجر
+  const appAsk = /(رابط التطبيق|رابط التطبيق|التطبيق|تطبيق|app link|app|link|رابط الموقع|رابط المتجر|الموقع|website|url)/.test(mm);
+  if (appAsk) {
+    const appLink = s.app_link || s.catalog_url || '';
+    const name = s.business_name || 'متجرنا';
+    return appLink ? `📱 تطبيق ${name} هنا:\n${appLink}\n\nحمّله وتابع المنتجات والطلبات فوراً. ولأي استفسار أنا هنا 🤍` : `📱 تطبيق ${name} قيد التحضير — تواصل معنا وسنرسلك الرابط فور نشره.`;
+  }
   if (close(mm, ['سعر', 'اسعار', 'كم', 'price', 'بكم'])) {
     const named = all('SELECT name_ar FROM products WHERE active=1').some(p => {
       const w = stripTashkeel(p.name_ar).split(/\s+/).filter(x => x.length >= 4);
@@ -190,7 +200,7 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
   const flowReply = handleOrderDraft(conv, text);
   const statusReplyText = handleOrderStatus(conv, text);
   const ratingReply = handleRating(conv, text);
-  let reply = statusReplyText || flowReply || ratingReply || await generateReply(text, history.slice(0, -1), image);
+  let reply = statusReplyText || flowReply || ratingReply || await generateReply(text, history.slice(0, -1), image, platform);
   // ترويج إعلاني داخل الشات (دوري بين الإعلانات النشطة، لكل قناة على حدة) — لا يقاطع تدفق الطلب
   if (!flowReply && !statusReplyText && !ratingReply) {
     const promo = pickChatAd(platform, conv.id);
@@ -215,6 +225,30 @@ async function handleIncoming({ platform, psid, name = '', text = '', externalId
     console.log(`[Options] ${platform} ${buttons.join(' | ')} -> ${JSON.stringify(opts)}`);
   }
   return { reply, sent, conversationId: conv.id };
+}
+
+// ردود مخصصة بكلمات مفتاحية (match_type: contains|exact|starts|word)، أولوية، لكل قناة
+function customReply(mm, platform = '') {
+  let rows;
+  try { rows = all('SELECT * FROM replies WHERE active = 1 ORDER BY priority DESC, id DESC'); } catch { return null; }
+  if (!rows.length) return null;
+  const norm = s => stripTashkeel(String(s || '')).replace(/[?!.،؟]/g, '').replace(/\s+/g, ' ').trim();
+  const msg = norm(mm);
+  if (!msg) return null;
+  for (const r of rows) {
+    if (r.channel && r.channel !== 'all' && platform && r.channel !== platform) continue;
+    const keys = String(r.keyword || '').split(/[،,]/).map(k => norm(k)).filter(Boolean);
+    if (!keys.length) continue;
+    const type = r.match_type || 'contains';
+    const hit = keys.some(k => {
+      if (type === 'exact') return msg === k;
+      if (type === 'starts') return msg.startsWith(k);
+      if (type === 'word') return msg.split(/\s+/).includes(k);
+      return msg.includes(k); // contains
+    });
+    if (hit) return String(r.answer || '').replace(/\{business\}/g, getSettings().business_name || 'متجرنا');
+  }
+  return null;
 }
 
 // رسالة الترحيب حسب القناة: welcome_messenger / welcome_whatsapp → welcome → greeting

@@ -76,6 +76,17 @@ CREATE TABLE IF NOT EXISTS faqs (
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL
 );
+-- ردود مخصصة بكلمات مفتاحية (منفصلة عن الأسئلة الشائعة للذكاء)
+CREATE TABLE IF NOT EXISTS replies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  keyword TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  match_type TEXT NOT NULL DEFAULT 'contains',   -- contains | exact | starts | word
+  channel TEXT NOT NULL DEFAULT 'all',            -- all | messenger | whatsapp
+  priority INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL DEFAULT ''
@@ -132,7 +143,17 @@ db.exec(`CREATE TABLE IF NOT EXISTS reviews (
   created_at TEXT NOT NULL
 );`);
 db.exec('CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);');
-// الإعلانات: لافتات للمتجر + ترويج داخل الشات + إدارة كاملة من الأدمن
+// ------------------------- notifications / broadcast -------------------------
+db.exec(`CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL DEFAULT '',
+  message TEXT NOT NULL,
+  platform TEXT NOT NULL DEFAULT 'all',      -- all | messenger | whatsapp
+  target TEXT NOT NULL DEFAULT 'all',        -- all | conversation psid
+  sent INTEGER NOT NULL DEFAULT 0,
+  failed INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);`);
 db.exec(`CREATE TABLE IF NOT EXISTS ads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL DEFAULT '',
@@ -150,6 +171,17 @@ db.exec(`CREATE TABLE IF NOT EXISTS ads (
   updated_at TEXT NOT NULL
 );`);
 db.exec('CREATE INDEX IF NOT EXISTS idx_ads_active ON ads(active, priority);');
+// إعدادات ردود لكل منشور على الصفحة (تعليقات Facebook)
+db.exec(`CREATE TABLE IF NOT EXISTS post_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  post_id TEXT NOT NULL,
+  keyword TEXT NOT NULL DEFAULT '',
+  answer TEXT NOT NULL,
+  reply_comment INTEGER NOT NULL DEFAULT 1,
+  notify_admin INTEGER NOT NULL DEFAULT 1,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);`);
 ensureColumn('orders', 'delivery_fee', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'delivery_method', "TEXT NOT NULL DEFAULT 'توصيل للمنزل'");
 ensureColumn('orders', 'psid', 'TEXT NOT NULL DEFAULT \'\'');
