@@ -182,6 +182,8 @@ function handleOrderDraft(conv, text) {
 async function handleIncoming({ platform, psid, name = '', text = '', externalId = '' , sendReply = true, image = null }) {
   text = String(text || '').trim();
   if (!psid || !text) return null;
+  // إيقاف الرد التلقائي على واتساب من التطبيق: تُحفظ الرسالة الواردة فقط دون أي رد
+  if (platform === 'whatsapp' && String(getSettings().wa_enabled ?? '1') === '0') sendReply = false;
   if (externalId && get('SELECT id FROM messages WHERE external_id = ? LIMIT 1', externalId)) return null;
 
   let conv = get('SELECT * FROM conversations WHERE platform = ? AND psid = ?', platform, psid);

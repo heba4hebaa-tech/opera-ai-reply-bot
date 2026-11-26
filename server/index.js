@@ -31,7 +31,7 @@ function ensureVapid() {
   } catch (e) { console.error('[push] فشل توليد المفاتيح:', e.message); return false; }
 }
 ensureVapid();
-async function pushToAll(title, message, url) {
+async function pushToAll(title, message, url, image) {
   if (!ensureVapid()) return 0;
   const subs = all('SELECT endpoint, p256dh, auth FROM push_subscriptions');
   let sent = 0;
@@ -39,7 +39,7 @@ async function pushToAll(title, message, url) {
     try {
       await webPush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        JSON.stringify({ title: String(title || ''), body: String(message || ''), url: url || '/', icon: '/icon-192.png' }),
+        JSON.stringify({ title: String(title || ''), body: String(message || ''), url: url || '/', icon: '/icon-192.png', image: String(image || '') }),
         { TTL: 86400 }
       );
       sent++;
@@ -716,7 +716,7 @@ add('GET', '/api/faqs', () => ({ items: all('SELECT id, question, answer FROM fa
 // ------------------------- إشعارات التطبيق + الاشتراك بالدفع -------------------------
 add('GET', '/api/notifications', ({ query }) => {
   const limit = Math.min(60, Math.max(1, num(query.get('limit') || 40)));
-  const items = all(`SELECT id, title, message, created_at FROM notifications
+  const items = all(`SELECT id, title, message, image_url, created_at FROM notifications
     WHERE platform IN ('app','all') ORDER BY id DESC LIMIT ${limit}`);
   return { items };
 });
@@ -804,14 +804,41 @@ add('POST', '/api/admin/notify', async ({ body }) => {
   }
   // إشعار التطبيق + إشعار الهاتف (Web Push) — يصل حتى إن كان التطبيق مغلقاً
   let pushSent = 0;
+  const image = str(body.image_url);
   if (platform === 'app' || platform === 'all') {
-    try { pushSent = await pushToAll(title || 'تنبيه جديد', message, '/'); }
+    try { pushSent = await pushToAll(title || 'تنبيه جديد', message, '/', image); }
     catch (e) { console.error('[push] فشل:', e.message); }
     sent += pushSent;
   }
-  const info = run('INSERT INTO notifications (title,message,platform,target,sent,failed,created_at) VALUES (?,?,?,?,?,?,?)',
-    title, message, platform, str(body.psid) || 'all', sent, failed, now());
+  const info = run('INSERT INTO notifications (title,message,platform,target,image_url,sent,failed,created_at) VALUES (?,?,?,?,?,?,?,?)',
+    title, message, platform, str(body.psid) || 'all', image.slice(0, 500), sent, failed, now());
   return { ok: true, id: Number(info.lastInsertRowid), targets: targets.length, sent, failed, pushSent };
+}, { auth: true });
+
+// إدارة رقم واتساب من التطبيق: تفعيل/إيقاف الرد + تغيير الرقم/المعرّف
+add('GET', '/api/admin/wa/status', () => {
+  const s = getSettings();
+  const c = waCredentials();
+  return {
+    ok: true, enabled: String(s.wa_enabled ?? '1') !== '0',
+    phoneId: c.phoneId || '', number: s.whatsapp_number || '',
+    hasToken: !!(s.wa_access_token || config.WA_ACCESS_TOKEN),
+  };
+}, { auth: true });
+add('POST', '/api/admin/wa/toggle', ({ body }) => {
+  const enabled = body && 'enabled' in body ? !!body.enabled : String(getSettings().wa_enabled ?? '1') === '0';
+  setSetting('wa_enabled', enabled ? '1' : '0');
+  try { run('INSERT INTO notifications (title,message,platform,target,created_at) VALUES (?,?,?,?,?)', 'حالة واتساب', enabled ? 'تم تفعيل الرد التلقائي على واتساب ✓' : 'تم إيقاف الرد التلقائي على واتساب ⏸️', 'app', 'all', now()); } catch {}
+  return { ok: true, enabled };
+}, { auth: true });
+add('POST', '/api/admin/wa/set-number', ({ body }) => {
+  const number = normalizePhone(str(body.number || body.phone)).replace(/^\+/, '');
+  const phoneId = str(body.phone_id || body.phoneId);
+  if (number) setSetting('whatsapp_number', number);
+  if (phoneId) setSetting('wa_phone_number_id', phoneId);
+  if (body.access_token) setSetting('wa_access_token', str(body.access_token));
+  try { run('INSERT INTO notifications (title,message,platform,target,created_at) VALUES (?,?,?,?,?)', 'رقم واتساب', `تم تحديث رقم النشاط${number ? ' إلى ' + number : ''}${phoneId ? ' والمعرّف ' + phoneId : ''}`, 'app', 'all', now()); } catch {}
+  return { ok: true, number: number || getSettings().whatsapp_number || '', phoneId: phoneId || getSettings().wa_phone_number_id || '' };
 }, { auth: true });
 
 add('GET', '/api/admin/push/subscribers', () => ({ items: all('SELECT id, endpoint, user_agent, created_at FROM push_subscriptions ORDER BY id DESC'), count: get('SELECT COUNT(*) AS n FROM push_subscriptions').n }), { auth: true });
@@ -832,7 +859,7 @@ add('DELETE', '/api/admin/reviews/:id', ({ params }) => {
   return { ok: true };
 }, { auth: true });
 
-const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'welcome', 'welcome_messenger', 'welcome_whatsapp', 'custom_instructions', 'reply_language', 'ai_temperature', 'ai_max_tokens', 'footer_text', 'bot_tone', 'ads_in_chat', 'ads_enabled', 'app_link', 'vapid_public_key', 'vapid_private_key'];
+const SETTING_KEYS = ['business_name', 'currency', 'country', 'logo_url', 'invoice_size', 'delivery_fee', 'delivery_free_threshold', 'delivery_note', 'delivery_methods', 'business_hours', 'return_policy', 'payment_methods', 'bank_info', 'whatsapp_number', 'wa_phone_number_id', 'wa_access_token', 'messenger_link', 'messenger_page_token', 'messenger_page_id', 'facebook_page_id', 'facebook_page_token', 'catalog_url', 'ai_enabled', 'greeting', 'welcome', 'welcome_messenger', 'welcome_whatsapp', 'custom_instructions', 'reply_language', 'ai_temperature', 'ai_max_tokens', 'footer_text', 'bot_tone', 'ads_in_chat', 'ads_enabled', 'app_link', 'wa_enabled', 'vapid_public_key', 'vapid_private_key'];
 add('GET', '/api/admin/settings', () => {
   const s = getSettings();
   const out = {}; SETTING_KEYS.forEach(k => { if (k !== 'vapid_private_key') out[k] = s[k] ?? ''; });

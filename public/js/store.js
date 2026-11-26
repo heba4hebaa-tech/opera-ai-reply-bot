@@ -239,7 +239,7 @@
         toast('🔔 ' + (n.title || 'تنبيه جديد') + ' — ' + (n.message || '').slice(0, 60));
         try {
           if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification(n.title || 'LUNZERA', { body: String(n.message || '').slice(0, 160), icon: '/icon-192.png', tag: 'lunzera-' + n.id });
+            new Notification(n.title || 'LUNZERA', { body: String(n.message || '').slice(0, 160), icon: '/icon-192.png', image: /^\/|^https?:/.test(n.image_url || '') ? n.image_url : undefined, tag: 'lunzera-' + n.id });
           }
         } catch {}
       }
@@ -251,14 +251,19 @@
     const head = `<div class="push-enable-card">
       <h4>📲 إشعارات على هاتفك</h4>
       <p>فعّل الإشعارات لتصلك التنبيهات فوراً حتى لو كان التطبيق مغلقاً — تماماً مثل تطبيقات الهاتف.</p>
-      <button class="btn-app sm" id="pushEnableBtn">${('Notification' in window && Notification.permission === 'granted') ? '✅ الإشعارات مفعّلة' : 'تفعيل إشعارات الهاتف'}</button>
+      <div class="row wrap" style="gap:8px;">
+        <button class="btn-app sm" id="pushEnableBtn">${('Notification' in window && Notification.permission === 'granted') ? '✅ الإشعارات مفعّلة' : 'تفعيل إشعارات الهاتف'}</button>
+        <button class="btn-app sm" id="pushDisableBtn" style="background:rgba(255,255,255,.18);">🔕 إلغاء التنبيهات</button>
+      </div>
     </div>`;
     const list = state.notifications.length
       ? state.notifications.map(n => {
           const isNew = !state.seenNotifs.includes(n.id);
           return `<div class="notif-card${isNew ? ' unread' : ''}">
             <div class="n-icon">${/طلب|🛒|🧾/.test(n.title + n.message) ? '📦' : /عرض|خصم|🎯/.test(n.title + n.message) ? '🏷️' : '🔔'}</div>
-            <div class="n-body"><b>${esc(n.title || 'تنبيه من المتجر')}</b><p>${esc(n.message || '')}</p>
+            <div class="n-body"><b>${esc(n.title || 'تنبيه من المتجر')}</b>
+              ${n.image_url && /^\/|^https?:/.test(n.image_url) ? `<img class="n-img" src="${esc(n.image_url)}" alt="" onerror="this.remove()">` : ''}
+              <p>${esc(n.message || '')}</p>
               <span class="n-date">${fmtDate(n.created_at)}</span></div>
             ${isNew ? '<span class="n-new"></span>' : ''}
           </div>`;
@@ -266,6 +271,15 @@
       : `<div class="empty-app"><span class="big">🔕</span><h4>لا توجد تنبيهات بعد</h4><p>ستظهر هنا كل الإشعارات الجديدة من متجرنا</p></div>`;
     box.innerHTML = head + (unread ? `<div class="row" style="justify-content:space-between;margin-bottom:10px;"><span class="muted-app">${unread} تنبيه جديد</span></div>` : '') + list;
     box.querySelector('#pushEnableBtn')?.addEventListener('click', enablePush);
+    box.querySelector('#pushDisableBtn')?.addEventListener('click', async () => {
+      try {
+        const endpoint = localStorage.getItem('opera_push_endpoint') || '';
+        if (endpoint) await fetch('/api/push/unsubscribe', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint }) });
+        localStorage.removeItem('opera_push_endpoint');
+        try { (await navigator.serviceWorker?.getRegistration())?.pushManager?.unsubscribe(); } catch {}
+        toast('تم إلغاء إشعارات الهاتف 🔕');
+      } catch { toast('تعذر إلغاء الإشعارات', true); }
+    });
   }
   async function enablePush() {
     const btn = $('pushEnableBtn');
@@ -288,6 +302,7 @@
         body: JSON.stringify({ subscription: { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth } }, user_agent: navigator.userAgent }),
       }).then(x => x.json());
       if (!r.ok) throw new Error(r.error || 'فشل الاشتراك');
+      try { localStorage.setItem('opera_push_endpoint', j.endpoint); } catch {}
       if (btn) { btn.textContent = '✅ الإشعارات مفعّلة على هذا الهاتف'; }
       toast('تم تفعيل إشعارات الهاتف ✓');
       new Notification('LUNZERA', { body: 'تم تفعيل الإشعارات — سنرسل لك كل تنبيه فوراً ✅', icon: '/icon-192.png' });
@@ -343,6 +358,8 @@
     state.products = prods.items || [];
     state.customer = me.customer || null;
     state.ads = ads.items || [];
+    if (localStorage.getItem('opera_theme') === 'dark') { document.documentElement.setAttribute('data-theme', 'dark'); if ($('hdrTheme')) $('hdrTheme').textContent = '🌙'; }
+    else { document.documentElement.removeAttribute('data-theme'); if ($('hdrTheme')) $('hdrTheme').textContent = '☀️'; }
     renderInfo(); renderChips(); renderProducts(); renderCustomer(); renderAds(); wireSearch(); wireScroll(); wireTabs(); wireChat(); wireHeader();
     updateBadges(); renderChat(); hideSplash(); autoAds();
     loadNotifications();
@@ -378,6 +395,12 @@
     $('hdrCart')?.addEventListener('click', openCart);
     $('hdrFavs')?.addEventListener('click', () => { setTabActive('favs'); renderFavs(); openView('viewFavs'); });
     $('hdrOrders')?.addEventListener('click', () => { setTabActive('home'); renderOrders(); openView('viewOrders'); });
+    $('hdrTheme')?.addEventListener('click', () => {
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      if (dark) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('opera_theme', 'light'); }
+      else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('opera_theme', 'dark'); }
+      $('hdrTheme').textContent = dark ? '☀️' : '🌙';
+    });
     $('hdrNotif')?.addEventListener('click', () => { renderNotifications(); openView('viewNotifs'); setTimeout(markAllSeen, 900); });
     $('hdrInstall')?.addEventListener('click', installGuide);
     $('notifsBack')?.addEventListener('click', closeViews);

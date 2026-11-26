@@ -1,5 +1,5 @@
 /* LUNZERA Service Worker — تطبيق قابل للتثبيت + تخزين مؤقت */
-const CACHE = 'lunzera-v4';
+const CACHE = 'lunzera-v5';
 const ASSETS = [
   '/',
   '/index.html',
@@ -34,6 +34,7 @@ self.addEventListener('push', e => {
   const options = {
     body: data.body || 'لديك إشعار جديد من متجرنا',
     icon: data.icon || '/icon-192.png',
+    image: data.image || '',
     badge: '/icon-192.png',
     tag: data.tag || 'lunzera-notification',
     dir: 'rtl',

@@ -153,8 +153,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS notifications (
   target TEXT NOT NULL DEFAULT 'all',        -- all | conversation psid
   sent INTEGER NOT NULL DEFAULT 0,
   failed INTEGER NOT NULL DEFAULT 0,
+  image_url TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );`);
+ensureColumn('notifications', 'image_url', "TEXT NOT NULL DEFAULT ''");
 // ------------------------- web push subscriptions (إشعارات الهاتف) -------------------------
 db.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

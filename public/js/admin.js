@@ -548,6 +548,33 @@
     if (r.ok) { toast('تم حفظ الإعدادات ✓'); loadOverview(); } else toast(r.error || 'تعذر الحفظ', true);
   };
 
+  async function refreshWaStatus() {
+    try {
+      const s = await api('/api/admin/wa/status');
+      const b = $('waToggleBtn');
+      if (b) {
+        b.textContent = s.enabled ? '🟢 الرد التلقائي مفعّل — اضغط للإيقاف' : '⏸️ الرد التلقائي متوقف — اضغط للتفعيل';
+        b.className = 'btn btn-sm ' + (s.enabled ? 'btn-ghost' : 'btn-primary');
+      }
+      const num = $('waNewNumber'); if (num && !num.value && s.number) num.placeholder = s.number;
+      const idEl = $('waNewId'); if (idEl && !idEl.value && s.phoneId) idEl.placeholder = s.phoneId;
+    } catch {}
+  }
+  refreshWaStatus();
+  $('waToggleBtn')?.addEventListener('click', async () => {
+    const cur = await api('/api/admin/wa/status').catch(() => ({ enabled: true }));
+    const r = await api('/api/admin/wa/toggle', { method: 'POST', body: { enabled: !cur.enabled } });
+    if (r.ok) { toast(r.enabled ? 'تم تفعيل الرد التلقائي ✓' : 'تم إيقاف الرد التلقائي ⏸️'); refreshWaStatus(); loadNotifications(); }
+    else toast(r.error || 'تعذر التغيير', true);
+  });
+  $('waSetNumber')?.addEventListener('click', async () => {
+    const number = $('waNewNumber').value.trim(); const phone_id = $('waNewId').value.trim();
+    if (!number && !phone_id) { toast('أدخل الرقم أو Phone Number ID', true); return; }
+    const r = await api('/api/admin/wa/set-number', { method: 'POST', body: { number, phone_id } });
+    if (r.ok) { toast('تم تغيير رقم واتساب ✓'); refreshWaStatus(); loadNotifications(); $('waNewNumber').value = ''; $('waNewId').value = ''; }
+    else toast(r.error || 'تعذر التغيير', true);
+  });
+
   $('testWhatsapp').onclick = async () => {
     const out = $('waTestResult');
     out.textContent = 'جارٍ التحقق...';
@@ -722,9 +749,18 @@ async function loadNotifications() {
   const d = await api('/api/admin/notifications'); const rows = $('notifRows'); if (!rows) return;
   rows.innerHTML = (d.items||[]).length ? d.items.map(n => `<tr><td>${esc(n.title||'—')}</td><td class="small muted">${esc((n.message||'').slice(0,60))}</td><td>${esc(n.platform)}</td><td>${n.sent}</td><td>${n.failed}</td><td class="small muted">${esc(n.created_at)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty">لا توجد تنبيهات</td></tr>';
 }
+const notifFile = $('notif_image_file'); if (notifFile) notifFile.onchange = async () => {
+  const f = notifFile.files[0]; if (!f) return;
+  try {
+    const url = await uploadFile(f);
+    $('notif_image').value = url;
+    $('notif_image_preview').innerHTML = `<img src="${esc(url)}" style="max-width:140px;max-height:90px;border-radius:10px;">`;
+    toast('تم رفع الصورة ✓');
+  } catch (e) { toast(e.message, true); }
+};
 const sendNotifBtn = $('sendNotif'); if (sendNotifBtn) sendNotifBtn.onclick = async () => {
   const msg = $('notif_msg').value.trim(); if (!msg) { toast('نص التنبيه مطلوب', true); return; }
-  const r = await api('/api/admin/notify', { method: 'POST', body: { title: $('notif_title').value, message: msg, platform: $('notif_platform').value, psid: $('notif_psid').value.trim() || undefined } });
+  const r = await api('/api/admin/notify', { method: 'POST', body: { title: $('notif_title').value, message: msg, platform: $('notif_platform').value, psid: $('notif_psid').value.trim() || undefined, image_url: $('notif_image')?.value.trim() || '' } });
   if (r.ok) { toast(`تم الإرسال ✓ — التطبيق/الهاتف: ${r.pushSent || 0} · محادثات: ${r.sent - (r.pushSent || 0)}/${r.targets}`); $('notif_msg').value = ''; loadNotifications(); } else toast(r.error || 'فشل الإرسال', true);
 };
 

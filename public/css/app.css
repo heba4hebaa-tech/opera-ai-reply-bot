@@ -3,11 +3,11 @@
    تُحمَّل آخر ملفات CSS · تصميم مثل تطبيقات العالم
    ============================================================ */
 :root {
-  --app-bg: #f4f6fa;
+  --app-bg: #f5f8fc;
   --app-card: #ffffff;
-  --app-ink: #0e1726;
-  --app-muted: #6b7a8f;
-  --app-line: #e6ecf4;
+  --app-ink: #101b2d;
+  --app-muted: #4d6079;
+  --app-line: #dbe4ef;
   --app-brand: #0f766e;
   --app-brand-2: #14b8a6;
   --app-brand-ink: #0b5d56;
@@ -22,20 +22,31 @@
   --app-header-h: 60px;
   --app-ease: cubic-bezier(.22, .9, .3, 1);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --app-bg: #0a1120; --app-card: #121b2d; --app-ink: #e8edf6; --app-muted: #93a1b5;
-    --app-line: #22304a; --app-brand-ink: #5eead4; --app-shadow: 0 10px 30px -14px rgba(0,0,0,.6);
-    --app-shadow-lg: 0 26px 60px -24px rgba(0,0,0,.7);
-  }
-}
+/* الوضع الفاتح هو الافتراضي دائماً — التبديل يدوي من زر المظهر */
 html[data-theme="dark"] {
   --app-bg: #0a1120; --app-card: #121b2d; --app-ink: #e8edf6; --app-muted: #93a1b5;
   --app-line: #22304a; --app-brand-ink: #5eead4; --app-shadow: 0 10px 30px -14px rgba(0,0,0,.6);
   --app-shadow-lg: 0 26px 60px -24px rgba(0,0,0,.7);
 }
 html { -webkit-tap-highlight-color: transparent; }
-body { background: var(--app-bg) !important; color: var(--app-ink); overscroll-behavior-y: none; }
+body {
+  background: var(--app-bg) !important; color: var(--app-ink); overscroll-behavior-y: none;
+  font-family: "Segoe UI", Tahoma, Arial, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+/* خطوط أوضح في الوضع الفاتح */
+html:not([data-theme="dark"]) .muted-app,
+html:not([data-theme="dark"]) .small.muted { color: #43556e; font-weight: 600; }
+html:not([data-theme="dark"]) .p-name { color: #10203a; font-weight: 800; }
+html:not([data-theme="dark"]) .app-header .brand-row b { color: #0c5f58; font-weight: 900; letter-spacing: .2px; }
+html:not([data-theme="dark"]) .site-footer { background: #fff !important; color: #263550 !important; border-top: 1px solid var(--app-line); }
+html:not([data-theme="dark"]) .site-footer a { color: #0d6b62 !important; font-weight: 700; }
+#hdrTheme { font-size: 18px; background: linear-gradient(135deg, #fff8e7, #ffedb8); border-color: #f2d99a; }
+html[data-theme="dark"] #hdrTheme { background: rgba(255,255,255,.1); }
+/* شعار أوضح */
+.app-header .brand-row img { background: #fff; border-radius: 10px; padding: 2px; box-shadow: 0 2px 8px -3px rgba(14,23,38,.35); }
+.splash-box img { background: #fff; padding: 8px; }
+.n-img { display: block; width: 100%; max-height: 190px; object-fit: cover; border-radius: 12px; margin: 8px 0; border: 1px solid var(--app-line); }
 
 /* ---------------- شاشة البداية (Splash) ---------------- */
 #appSplash {

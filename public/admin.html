@@ -119,6 +119,11 @@
         <div class="card" style="max-width:640px;">
           <div class="form-row"><label>عنوان (اختياري)</label><input id="notif_title" placeholder="عرض جديد"></div>
           <div class="form-row"><label>النص</label><textarea id="notif_msg" placeholder="خصم 20% اليوم على كل المنتجات..."></textarea></div>
+          <div class="form-row"><label>🖼️ صورة التنبيه (رابط أو ارفع صورة)</label>
+            <input id="notif_image" placeholder="https://... أو /uploads/...">
+            <input type="file" id="notif_image_file" accept="image/*" style="margin-top:8px;">
+            <div id="notif_image_preview" class="small" style="margin-top:6px;"></div>
+          </div>
           <div class="form-row two"><div><label>القناة</label><select id="notif_platform"><option value="all">الكل (التطبيق + الهاتف + المسنجر)</option><option value="app">التطبيق والهاتف فقط</option><option value="messenger">مسنجر</option><option value="whatsapp">واتساب</option></select></div>
             <div><label>معرّف محادثة محددة (اختياري)</label><input id="notif_psid" placeholder="PSID / رقم"></div></div>
           <button class="btn btn-primary" id="sendNotif">🔔 إرسال التنبيه</button>
@@ -175,8 +180,20 @@
             <div class="form-row"><label>رقم واتساب للعرض (زر المحادثة)</label><input id="set_whatsapp_number" placeholder="2189xxxxxxxx"></div>
             <div class="form-row"><label>واتساب Phone Number ID (من Meta)</label><input id="set_wa_phone_number_id" placeholder="رقم من Meta Developers"></div>
             <div class="form-row"><label>واتساب Access Token</label><input id="set_wa_access_token" type="password" placeholder="اتركه فارغاً لاستخدام التوكن في .env"></div>
-            <div class="row"><button class="btn btn-ghost btn-sm" id="testWhatsapp">🔍 تحقق من رقم النشاط</button><span id="waTestResult" class="small muted"></span></div>
-            <p class="small muted">تقدر تغيّر رقم النشاط هنا في أي وقت — يُستخدم فوراً لإرسال ردود واتساب بدون إعادة تشغيل.</p>
+            <div class="card" style="background:var(--bg-soft);margin:10px 0;">
+              <h4 style="margin:0 0 8px;">⚙️ التحكم برقم النشاط</h4>
+              <div class="row wrap" style="gap:8px;">
+                <button class="btn btn-sm" id="waToggleBtn">…</button>
+                <button class="btn btn-ghost btn-sm" id="testWhatsapp">🔍 تحقق من الرقم</button>
+              </div>
+              <div class="row wrap" style="gap:8px;margin-top:8px;">
+                <input id="waNewNumber" placeholder="رقم جديد 2189xxxxxxxx" style="flex:1;min-width:150px;">
+                <input id="waNewId" placeholder="Phone Number ID" style="flex:1;min-width:150px;">
+                <button class="btn btn-primary btn-sm" id="waSetNumber">تغيير الرقم</button>
+              </div>
+              <span id="waTestResult" class="small muted"></span>
+              <p class="small muted" style="margin:6px 0 0;">عند الإيقاف تُحفظ رسائل الزبائن دون رد تلقائي. تغيير الرقم يُطبَّق فوراً بدون إعادة تشغيل.</p>
+            </div>
             <div class="form-row"><label>رابط الكتالوج (اختياري)</label><input id="set_catalog_url" placeholder="https://..."></div>
             <div class="form-row"><label>📱 رابط التطبيق (يُرسل للزبون إذا طلبه)</label><input id="set_app_link" placeholder="https://opera-ai-reply-bot.onrender.com"></div>
             <div class="form-row"><label>رابط صفحة مسنجر (اختياري)</label><input id="set_messenger_link" placeholder="https://m.me/..."></div>
