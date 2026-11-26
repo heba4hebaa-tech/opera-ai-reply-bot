@@ -772,6 +772,12 @@ add('POST', '/api/admin/notify', async ({ body }) => {
   return { ok: true, id: Number(info.lastInsertRowid), targets: targets.length, sent, failed, pushSent };
 }, { auth: true });
 
+add('GET', '/api/admin/push/subscribers', () => ({ items: all('SELECT id, endpoint, user_agent, created_at FROM push_subscriptions ORDER BY id DESC'), count: get('SELECT COUNT(*) AS n FROM push_subscriptions').n }), { auth: true });
+add('DELETE', '/api/admin/push/subscribers/:id', ({ params }) => {
+  run('DELETE FROM push_subscriptions WHERE id=?', num(params.id));
+  return { ok: true };
+}, { auth: true });
+
 add('GET', '/api/admin/reviews', () => ({ items: all('SELECT * FROM reviews ORDER BY id DESC LIMIT 200') }), { auth: true });
 add('POST', '/api/admin/reviews', ({ body }) => {
   const pid = Number(body.product_id);

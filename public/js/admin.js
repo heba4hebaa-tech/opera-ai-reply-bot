@@ -653,6 +653,10 @@ function replyForm(r) {
 const addReplyBtn = $('addReply'); if (addReplyBtn) addReplyBtn.onclick = () => replyForm();
 
 async function loadNotifications() {
+  try {
+    const p = await api('/api/admin/push/subscribers');
+    const el = $('pushSubs'); if (el) el.textContent = `الأجهزة المشتركة في إشعارات الهاتف: ${p.count || 0} — التنبيهات تصل حتى والتطبيق مغلق`;
+  } catch {}
   const d = await api('/api/admin/notifications'); const rows = $('notifRows'); if (!rows) return;
   rows.innerHTML = (d.items||[]).length ? d.items.map(n => `<tr><td>${esc(n.title||'—')}</td><td class="small muted">${esc((n.message||'').slice(0,60))}</td><td>${esc(n.platform)}</td><td>${n.sent}</td><td>${n.failed}</td><td class="small muted">${esc(n.created_at)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty">لا توجد تنبيهات</td></tr>';
 }
