@@ -8,6 +8,7 @@ const { all, get, run, now, getSettings, setSetting, hashPassword, verifyPasswor
 const { handleIncoming, generateReply } = require('./services/chat');
 const { credentials: waCredentials } = require('./services/platforms');
 const { creds: fbCreds, sendPagePost, replyPost, replyComment, graph: fbGraph } = require('./services/facebook');
+const poller = require('./services/poller');
 
 // ------------------------- helpers -------------------------
 const str = v => String(v ?? '').trim();
@@ -921,6 +922,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+add('GET', '/api/admin/poller/status', () => poller.status(), { auth: true });
+add('POST', '/api/admin/poller/start', () => { poller.start(); return { ok: true, ...poller.status() }; }, { auth: true });
+add('POST', '/api/admin/poller/stop', () => { poller.stop(); return { ok: true, ...poller.status() }; }, { auth: true });
+add('POST', '/api/admin/poller/run', async () => { await poller.poll(); return { ok: true, ...poller.status() }; }, { auth: true });
+
 server.listen(config.PORT, config.HOST, () => {
   console.log('');
   console.log('  🤖 تطبيق الرد الذكي جاهز');
@@ -933,4 +939,5 @@ server.listen(config.PORT, config.HOST, () => {
   console.log(`  Messenger: ${config.MESSENGER_PAGE_TOKEN ? 'مفعّل' : 'غير مُعدّ'}`);
   console.log(`  كلمة أدمن افتراضية: admin / admin123  👈 غيّرها من لوحة الأدمن`);
   console.log('');
+  try { poller.start(); } catch (e) { console.error('[poller] start failed:', e.message); }
 });
