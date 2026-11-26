@@ -110,13 +110,14 @@ function handleRating(conv, text) {
   run('INSERT INTO reviews (product_id, order_id, customer_name, phone, rating, text, created_at) VALUES (?,?,?,?,?,?,?)', Number(last?.id) || 0, o.id, o.customer_name, o.phone, num, String(text).slice(0, 300), now());
   return `شكراً لأنك قيّمتنا! 🌟 تم تسجيل تقييمك ${num}/٥ للمنتج — نتمنى أن تنال إعجابك ونحن نجهّز لك كل ما يلزم.`;
 }
+function normalizePhone(v){let d=String(v||'').replace(/[^\d+]/g,'');if(d.startsWith('00'))d='+'+d.slice(2);d=d.replace(/\D/g,'');if(!d)return'';if(d.startsWith('218')){}else if(d.startsWith('0'))d='218'+d.slice(1);else if(d.length<=9)d='218'+d;if(d.startsWith('218218'))d=d.slice(3);return'+'+d;}
 function orderQuestion(next) {
   const n = ORDER_FIELDS.indexOf(next) + 1;
   const tips = {
     product: 'اكتب اسم المنتج (أو اختر «عرض المنتجات» ثم ارجع)، مثال: قميص تجريبي',
     qty: 'كم القطعة تريد؟ (رقم فقط)',
     name: 'اكتب اسمك الكريم',
-    phone: 'اكتب رقم جوالك مع رمز الدولة، مثال: 218945343522',
+    phone: 'اكتب رقم جوالك مع رمز الدولة، مثال: 0945343522 أو 218945343522',
     address: 'اكتب عنوان التسليم (المدينة + الشارع)',
   };
   return `تمام، خلينا نجهّز طلبك بسرعة 🛒\n${n}/5) ${tips[next]}\n(للإلغاء اكتب «إلغاء»)`;
@@ -163,7 +164,7 @@ function handleOrderDraft(conv, text) {
   }).sort((a, b) => b.score - a.score);
   const p = scored[0]?.score ? scored[0].p : { id: 0, name_ar: data.product, price: 0 };
   const qty = Math.min(99, Math.max(1, Number(data.qty) || 1));
-  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, psid, paid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, data.name, data.phone, data.address, `طلب من ${conv.platform}`,
+  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, psid, paid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, data.name, normalizePhone(data.phone) || data.phone, data.address, `طلب من ${conv.platform}`,
     JSON.stringify([{ id: p.id, name: p.name_ar, price: p.price, qty, options: '', category: p.category_id }]),
     p.price * qty, 'جديد', conv.platform === 'whatsapp' ? 'واتساب' : 'مسنجر', now(), 0, String(conv.psid || conv.id), 0);
   if (p.id) run('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?', qty, p.id);
