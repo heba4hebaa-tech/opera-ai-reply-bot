@@ -3,7 +3,7 @@
   const $ = id => document.getElementById(id);
   const titles = {
     overview: 'نظرة عامة', categories: 'الأصناف', products: 'المنتجات', orders: 'الطلبات',
-    conversations: 'المحادثات', customers: 'الزبائن والتحقق', faqs: 'الأسئلة الشائعة', ads: 'الإعلانات', tester: 'اختبار الرد', settings: 'الإعدادات', system: 'حالة النظام', security: 'كلمة المرور',
+    conversations: 'المحادثات', customers: 'الزبائن والتحقق', faqs: 'الأسئلة الشائعة', ads: 'الإعلانات', replies: 'ردود مخصصة', notifications: 'التنبيهات', tester: 'اختبار الرد', settings: 'الإعدادات', system: 'حالة النظام', security: 'كلمة المرور',
   };
   const state = { me: null, categories: [], products: [] };
   const statusClass = s => ({ 'جديد': 'warn', 'قيد التحضير': 'ok', 'تم الشحن': '', 'مكتمل': 'ok', 'ملغي': 'bad' }[s] || '');
@@ -43,7 +43,7 @@
     if (!me.user) { location.href = '/login'; return; }
     state.me = me.user;
     wireNav();
-    await Promise.all([loadOverview(), loadCategories(), loadProducts(), loadOrders(), loadConversations(), loadCustomers(), loadFaqs(), loadSettings(), loadAds()]);
+    await Promise.all([loadOverview(), loadCategories(), loadProducts(), loadOrders(), loadConversations(), loadCustomers(), loadFaqs(), loadSettings(), loadAds(), loadReplies(), loadNotifications(), loadPostRules()]);
   }
 
   let sysTimer = null;
@@ -631,4 +631,46 @@
   };
 
   boot();
+// ===== custom replies + notifications + post rules =====
+async function loadReplies() {
+  const d = await api('/api/admin/replies'); const rows = $('replyRows'); if (!rows) return;
+  const matchL = { contains: 'يحتوي', exact: 'مطابقة', starts: 'يبدأ', word: 'كلمة' };
+  rows.innerHTML = d.items.length ? d.items.map(r => `<tr><td><b>${esc(r.keyword)}</b></td><td class="small muted">${esc(r.answer.slice(0,60))}</td><td>${esc(matchL[r.match_type]||r.match_type)}</td><td>${esc(r.channel)}</td><td>${r.priority||0}</td><td><span class="pill ${r.active?'ok':'bad'}">${r.active?'نشط':'مخفي'}</span></td><td><button class="btn btn-ghost btn-sm" data-er="${r.id}">تعديل</button> <button class="btn btn-danger btn-sm" data-dr="${r.id}">حذف</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty">لا توجد ردود مخصصة</td></tr>';
+  rows.querySelectorAll('[data-er]').forEach(b => b.onclick = async () => { const all = (await api('/api/admin/replies')).items; replyForm(all.find(x => x.id === Number(b.dataset.er))); });
+  rows.querySelectorAll('[data-dr]').forEach(b => b.onclick = () => confirmBox('حذف الرد؟', async () => { await api('/api/admin/replies/' + b.dataset.dr, { method: 'DELETE' }); toast('تم الحذف'); loadReplies(); }));
+}
+function replyForm(r) {
+  r = r || {}; const mt = r.match_type || 'contains', ch = r.channel || 'all';
+  const m = modal(r.id ? 'تعديل رد' : 'رد جديد', `<form id="replyForm">
+    <div class="form-row"><label>كلمات مفتاحية (فاصلة)</label><input name="keyword" value="${esc(r.keyword||'')}" required></div>
+    <div class="form-row"><label>الرد</label><textarea name="answer" required>${esc(r.answer||'')}</textarea></div>
+    <div class="form-row two"><div><label>النوع</label><select name="match_type"><option value="contains" ${mt==='contains'?'selected':''}>يحتوي</option><option value="exact" ${mt==='exact'?'selected':''}>مطابقة تامة</option><option value="starts" ${mt==='starts'?'selected':''}>يبدأ بـ</option><option value="word" ${mt==='word'?'selected':''}>كلمة كاملة</option></select></div>
+      <div><label>القناة</label><select name="channel"><option value="all" ${ch==='all'?'selected':''}>الكل</option><option value="messenger" ${ch==='messenger'?'selected':''}>مسنجر</option><option value="whatsapp" ${ch==='whatsapp'?'selected':''}>واتساب</option></select></div></div>
+    <div class="form-row two"><div><label>أولوية</label><input name="priority" type="number" value="${r.priority||0}"></div><div class="check" style="align-self:end;padding-bottom:10px;"><input type="checkbox" name="active" ${r.active===0?'':'checked'}><label>مفعّل</label></div></div>
+    <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary">حفظ</button></div></form>`);
+  m.el.querySelector('#replyForm').addEventListener('submit', async e => { e.preventDefault(); const fd = new FormData(e.target); const payload = { keyword: fd.get('keyword'), answer: fd.get('answer'), match_type: fd.get('match_type'), channel: fd.get('channel'), priority: Number(fd.get('priority')||0), active: fd.get('active')==='on' }; const res = await api(r.id ? '/api/admin/replies/'+r.id : '/api/admin/replies', { method: r.id?'PUT':'POST', body: payload }); if (res.error) { toast(res.error, true); return; } m.close(); toast('تم الحفظ ✓'); loadReplies(); });
+}
+const addReplyBtn = $('addReply'); if (addReplyBtn) addReplyBtn.onclick = () => replyForm();
+
+async function loadNotifications() {
+  const d = await api('/api/admin/notifications'); const rows = $('notifRows'); if (!rows) return;
+  rows.innerHTML = (d.items||[]).length ? d.items.map(n => `<tr><td>${esc(n.title||'—')}</td><td class="small muted">${esc((n.message||'').slice(0,60))}</td><td>${esc(n.platform)}</td><td>${n.sent}</td><td>${n.failed}</td><td class="small muted">${esc(n.created_at)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty">لا توجد تنبيهات</td></tr>';
+}
+const sendNotifBtn = $('sendNotif'); if (sendNotifBtn) sendNotifBtn.onclick = async () => {
+  const msg = $('notif_msg').value.trim(); if (!msg) { toast('نص التنبيه مطلوب', true); return; }
+  const r = await api('/api/admin/notify', { method: 'POST', body: { title: $('notif_title').value, message: msg, platform: $('notif_platform').value, psid: $('notif_psid').value.trim() || undefined } });
+  if (r.ok) { toast(`تم الإرسال — نجح ${r.sent}/${r.targets} ✓`); $('notif_msg').value = ''; loadNotifications(); } else toast(r.error || 'فشل الإرسال', true);
+};
+
+async function loadPostRules() {
+  const d = await api('/api/admin/post-rules'); const rows = $('postRuleRows'); if (!rows) return;
+  rows.innerHTML = (d.items||[]).length ? d.items.map(p => `<tr><td>${esc(p.post_id)}</td><td>${esc(p.keyword||'كل')}</td><td class="small muted">${esc((p.answer||'').slice(0,50))}</td><td>${p.reply_comment?'✅':'—'}</td><td>${p.notify_admin?'✅':'—'}</td><td><button class="btn btn-danger btn-sm" data-dp="${p.id}">حذف</button></td></tr>`).join('') : '<tr><td colspan="6" class="empty">لا توجد قواعد</td></tr>';
+  rows.querySelectorAll('[data-dp]').forEach(b => b.onclick = () => confirmBox('حذف القاعدة؟', async () => { await api('/api/admin/post-rules/' + b.dataset.dp, { method: 'DELETE' }); toast('تم الحذف'); loadPostRules(); }));
+}
+const addPostRuleBtn = $('addPostRule'); if (addPostRuleBtn) addPostRuleBtn.onclick = async () => {
+  const post_id = prompt('معرّف المنشور (post_id) أو * للكل:'); if (!post_id) return;
+  const answer = prompt('نص الرد على التعليق:'); if (!answer) return;
+  const keyword = prompt('كلمة مفتاحية (اتركها فارغة لكل التعليقات):') || '';
+  await api('/api/admin/post-rules', { method: 'POST', body: { post_id, answer, keyword, reply_comment: true, notify_admin: true } }); toast('تمت الإضافة ✓'); loadPostRules();
+};
 })();

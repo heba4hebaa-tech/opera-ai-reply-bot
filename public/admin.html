@@ -18,6 +18,8 @@
     <button class="nav-item" data-section="conversations"><span class="ico">💬</span><span>المحادثات</span></button>
     <button class="nav-item" data-section="customers"><span class="ico">👥</span><span>الزبائن والتحقق</span></button>
     <button class="nav-item" data-section="faqs"><span class="ico">❓</span><span>الأسئلة الشائعة</span></button>
+    <button class="nav-item" data-section="replies"><span class="ico">💬</span><span>ردود مخصصة</span></button>
+    <button class="nav-item" data-section="notifications"><span class="ico">🔔</span><span>التنبيهات</span></button>
     <button class="nav-item" data-section="ads"><span class="ico">📣</span><span>الإعلانات</span></button>
     <div class="nav-sep"></div>
     <button class="nav-item" data-section="tester"><span class="ico">🧪</span><span>اختبار الرد</span></button>
@@ -101,6 +103,28 @@
       <section class="section" id="sec-faqs">
         <div class="section-head"><div><h2>الأسئلة الشائعة</h2><p class="muted small">قاعدة المعرفة التي يستخدمها المساعد الذكي في إجاباته</p></div><button class="btn btn-primary" id="addFaq">+ سؤال جديد</button></div>
         <div class="card"><div class="table-wrap"><table><thead><tr><th>السؤال</th><th>الجواب</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="faqRows"></tbody></table></div></div>
+      </section>
+
+      
+      <!-- custom replies -->
+      <section class="section" id="sec-replies">
+        <div class="section-head"><div><h2>ردود مخصصة</h2><p class="muted small">كلمات مفتاحية → رد جاهز تتقدّم على الذكاء الاصطناعي (لكل قناة، بأولوية)</p></div><button class="btn btn-primary" id="addReply">+ رد جديد</button></div>
+        <div class="card"><div class="table-wrap"><table><thead><tr><th>كلمات مفتاحية</th><th>الرد</th><th>النوع</th><th>القناة</th><th>أولوية</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="replyRows"></tbody></table></div></div>
+        <p class="small muted">الكلمات مفصولة بفاصلة. النوع: يحتوي/مطابقة تامة/يبدأ بـ/كلمة كاملة. {business} اسم المتجر.</p>
+      </section>
+
+      <!-- notifications -->
+      <section class="section" id="sec-notifications">
+        <div class="section-head"><div><h2>التنبيهات والإشعارات</h2><p class="muted small">أرسل تنبيهاً للزبائن على المسنجر/واتساب</p></div></div>
+        <div class="card" style="max-width:640px;">
+          <div class="form-row"><label>عنوان (اختياري)</label><input id="notif_title" placeholder="عرض جديد"></div>
+          <div class="form-row"><label>النص</label><textarea id="notif_msg" placeholder="خصم 20% اليوم على كل المنتجات..."></textarea></div>
+          <div class="form-row two"><div><label>القناة</label><select id="notif_platform"><option value="all">الكل</option><option value="messenger">مسنجر</option><option value="whatsapp">واتساب</option></select></div>
+            <div><label>معرّف محادثة محددة (اختياري)</label><input id="notif_psid" placeholder="PSID / رقم"></div></div>
+          <button class="btn btn-primary" id="sendNotif">🔔 إرسال التنبيه</button>
+        </div>
+        <div class="card" style="margin-top:14px;"><h3 class="card-title">سجل التنبيهات</h3><div class="table-wrap"><table><thead><tr><th>العنوان</th><th>النص</th><th>القناة</th><th>نجح</th><th>فشل</th><th>الوقت</th></tr></thead><tbody id="notifRows"></tbody></table></div></div>
+        <div class="card" style="margin-top:14px;"><h3 class="card-title">📣 ردود لكل منشور (Facebook)</h3><button class="btn btn-ghost btn-sm" id="addPostRule" style="margin-bottom:8px;">+ قاعدة منشور</button><div class="table-wrap"><table><thead><tr><th>post_id</th><th>كلمة</th><th>الرد</th><th>رد على التعليق</th><th>تنبيه أدمن</th><th>إجراءات</th></tr></thead><tbody id="postRuleRows"></tbody></table></div><p class="small muted">post_id المنشور أو * للكل. الكلمة فارغة = كل التعليقات.</p></div>
       </section>
 
       <!-- ads -->
