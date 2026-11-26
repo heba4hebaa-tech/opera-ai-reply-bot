@@ -2,106 +2,193 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0f766e">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="LUNZERA">
+<meta name="description" content="متجر LUNZERA — تسوّق ذكي مع مساعد فوري على مدار الساعة">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-512.png" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>متجرنا | تسوّق وتكلّم معنا</title>
 <link rel="stylesheet" href="/css/style.css">
 <link rel="stylesheet" href="/css/modern.css">
+<link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 </head>
 <body>
-  <header class="site-header">
-    <div class="site-brand"><img id="brandLogo" src="/logo.svg" alt="LUNZERA" style="height:34px;"><span id="brandName">LUNZERA</span></div>
-    <nav class="site-nav">
-      <a href="#home">الرئيسية</a>
-      <a href="#products">المنتجات</a>
-      <a href="#contact">تواصل معنا</a>
-      <a href="/admin">الأدمن</a>
-    </nav>
-    <div class="row">
-      <button class="btn btn-ghost btn-sm" id="loginBtn">👤 دخول الزبون</button>
-      <button class="btn btn-outline btn-sm cart-btn" id="cartBtn">🛒 السلة <span class="cart-count" id="cartCount">0</span></button>
+
+<!-- شاشة البداية -->
+<div id="appSplash">
+  <div class="splash-box">
+    <img src="/icon-192.png" alt="LUNZERA" onerror="this.src='/logo.svg'">
+    <h1>LUNZERA</h1>
+    <p>جارٍ تجهيز تجربة التسوّق…</p>
+    <div class="splash-bar"><i></i></div>
+  </div>
+</div>
+
+<!-- الهيدر الزجاجي -->
+<header class="site-header app-header" id="appHeader">
+  <div class="brand-row site-brand">
+    <img id="brandLogo" src="/logo.svg" alt="LUNZERA">
+    <b id="brandName">LUNZERA</b>
+  </div>
+  <div class="app-actions">
+    <button class="icon-btn-round" id="hdrOrders" title="طلباتي" aria-label="طلباتي">📦</button>
+    <button class="icon-btn-round" id="hdrFavs" title="المفضلة" aria-label="المفضلة">❤️<span class="dot-badge zero" id="favBadge">0</span></button>
+    <button class="icon-btn-round" id="hdrCart" title="السلة" aria-label="السلة">🛒<span class="dot-badge zero" id="cartBadge">0</span></button>
+    <button class="icon-btn-round avatar-btn" id="loginBtn" title="حسابي">👤</button>
+  </div>
+</header>
+
+<!-- الواجهة الرئيسية -->
+<section class="hero" id="home">
+  <div class="hero-inner">
+    <span class="tag">✨ تسوّق ذكي · رد فوري على مدار الساعة</span>
+    <h1>كل ما تحتاجه، <span>بضغطة زر</span></h1>
+    <p id="heroText">تصفّح منتجاتنا، أضف ما يعجبك للسلة، واطلب خلال ثوانٍ. ولديك أي سؤال؟ مساعدنا الذكي جاهز للرد عليك فوراً على واتساب ومسنجر.</p>
+    <div class="hero-actions">
+      <a href="#products" class="btn btn-gold">تصفّح المنتجات ←</a>
+      <button class="btn btn-outline" id="heroChat" style="color:#fff;border-color:rgba(255,255,255,.5)">💬 تكلّم معنا</button>
     </div>
-  </header>
-
-  <section class="hero" id="home">
-    <div class="hero-inner">
-      <span class="tag">✨ تسوّق ذكي · رد فوري على مدار الساعة</span>
-      <h1>كل ما تحتاجه، <span>بضغطة زر</span></h1>
-      <p id="heroText">تصفّح منتجاتنا، أضف ما يعجبك للسلة، واطلب خلال ثوانٍ. ولديك أي سؤال؟ مساعدنا الذكي جاهز للرد عليك فوراً على واتساب ومسنجر.</p>
-      <div class="hero-actions">
-        <a href="#products" class="btn btn-gold">تصفّح المنتجات ←</a>
-        <button class="btn btn-outline" id="heroChat" style="color:#fff;border-color:rgba(255,255,255,.5)">💬 تكلّم معنا</button>
-      </div>
-      <div class="trust">
-        <span>⚡ رد فوري</span><span>🤖 مساعد ذكي</span><span>🚚 توصيل سريع</span><span>🔒 طلب آمن</span>
-      </div>
+    <div class="trust">
+      <span>⚡ رد فوري</span><span>🤖 مساعد ذكي</span><span>🚚 توصيل سريع</span><span>🔒 طلب آمن</span>
     </div>
-  </section>
+  </div>
+</section>
 
-  <main class="store-body">
-    <!-- لافتة إعلانية علوية -->
-    <div class="ads-banner" id="adsHero" hidden></div>
-    <div class="card" style="padding:14px 18px;background:linear-gradient(135deg,#eaf7f4,#f3f8ff);border:1px solid #dceee9;">
-      <div class="row wrap" style="justify-content:space-between;">
-        <div class="row"><span style="font-size:22px;">💬</span><div><b>أسئلتك؟ مساعدنا يرد عليك فوراً</b><div class="small muted">واتساب ومسنجر — على مدار الساعة</div></div></div>
-        <button class="btn btn-primary btn-sm" id="assistantBtn">جرّب المساعد</button>
-      </div>
+<main class="store-body">
+  <!-- لافتة إعلانية علوية -->
+  <div class="ads-banner" id="adsHero" hidden></div>
+
+  <div class="card" style="padding:14px 18px;background:linear-gradient(135deg,#eaf7f4,#f3f8ff);border:1px solid #dceee9;">
+    <div class="row wrap" style="justify-content:space-between;">
+      <div class="row"><span style="font-size:22px;">💬</span><div><b>أسئلتك؟ مساعدنا يرد عليك فوراً</b><div class="small muted">دردشة داخل التطبيق · واتساب · مسنجر</div></div></div>
+      <button class="btn btn-primary btn-sm" id="assistantBtn">جرّب المساعد</button>
     </div>
+  </div>
 
-    <div class="section-title">
-      <div><h2>منتجاتنا</h2><p>اختر ما يناسبك وأضفه للسلة</p></div>
-      <span class="pill" id="productCount">0 منتج</span>
+  <div class="section-title" id="products">
+    <div><h2>منتجاتنا</h2><p>اختر ما يناسبك وأضفه للسلة</p></div>
+    <span class="pill" id="productCount">0 منتج</span>
+  </div>
+  <div class="chips no-bar" id="categoryChips"></div>
+  <div class="search-app" id="searchBar" style="margin:14px 0;">🔎 <input id="searchInput" type="search" placeholder="ابحث عن منتج، لون، مقاس..." aria-label="بحث"></div>
+  <!-- لافتات إعلانية -->
+  <div class="ads-banner" id="adsBanner" hidden></div>
+  <div class="p-grid" id="productGrid">
+    <div class="empty-app" style="grid-column:1/-1;"><span class="big">🛍️</span><h4>جارٍ تحميل المنتجات…</h4></div>
+  </div>
+</main>
+
+<footer class="site-footer" id="contact">
+  <div id="footerText">نرحب بطلباتكم على مدار الساعة 🤍</div>
+  <div class="row" style="justify-content:center;margin-top:10px;gap:16px;">
+    <a id="waLink" href="#" class="small">📱 واتساب</a>
+    <a id="msLink" href="#" class="small">💬 مسنجر</a>
+    <a href="/admin" class="small">🔐 الأدمن</a>
+  </div>
+</footer>
+
+<!-- شريط التنقل السفلي -->
+<nav class="tabbar" aria-label="تطبيق">
+  <button class="tab-item active" id="tabHome" data-tab="home">
+    <svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></svg>
+    <span>الرئيسية</span>
+  </button>
+  <button class="tab-item" id="tabStore" data-tab="store">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16l-1 13H5L4 7z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg>
+    <span>المتجر</span>
+  </button>
+  <button class="tab-item tab-fab" id="tabChat" data-tab="chat" title="المساعد الذكي">
+    <i>💬</i>
+  </button>
+  <button class="tab-item" id="tabFavs" data-tab="favs">
+    <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-9.2-8.4C1.2 8.7 2.7 5 6.1 5c2 0 3.2 1.2 3.9 2.2C10.7 6.2 11.9 5 13.9 5c3.4 0 4.9 3.7 3.3 6.6C19 15.5 12 20 12 20z"/></svg>
+    <span>المفضلة</span>
+    <span class="tab-badge zero" id="tabFavBadge">0</span>
+  </button>
+  <button class="tab-item" id="tabCart" data-tab="cart">
+    <svg viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/><path d="M2 3h3l2.6 12.4a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.2L21 7H6"/></svg>
+    <span>السلة</span>
+    <span class="tab-badge zero" id="tabCartBadge">0</span>
+  </button>
+</nav>
+
+<!-- شاشة الدردشة مع المساعد الذكي -->
+<section class="app-view" id="viewChat" aria-hidden="true">
+  <div class="view-head">
+    <button class="icon-btn-round" id="chatBack" aria-label="رجوع">→</button>
+    <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#0f766e,#14b8a6);display:grid;place-items:center;font-size:18px;">🤖</div>
+    <div style="flex:1;min-width:0;">
+      <h3 style="font-size:15px;">المساعد الذكي</h3>
+      <div class="muted-app" style="font-size:11px;">يرد فوراً · على مدار الساعة</div>
     </div>
-    <div class="chips" id="categoryChips"></div>
-    <div class="search-bar" id="searchBar">🔎 <input id="searchInput" type="search" placeholder="ابحث عن منتج، لون، مقاس..." aria-label="بحث"></div>
-    <!-- لافتات إعلانية -->
-    <div class="ads-banner" id="adsBanner" hidden></div>
-    <div class="product-grid" id="productGrid">
-      <div class="empty" style="grid-column:1/-1;">جارٍ تحميل المنتجات...</div>
-    </div>
-  </main>
+    <button class="icon-btn-round" id="chatClear" title="محادثة جديدة" aria-label="محادثة جديدة">🗑️</button>
+  </div>
+  <div class="view-body no-bar" id="chatScroll">
+    <div id="chatStream"></div>
+  </div>
+  <div class="chat-chips no-bar" id="chatChips">
+    <button class="chat-chip">📦 عرض المنتجات</button>
+    <button class="chat-chip">💰 الأسعار</button>
+    <button class="chat-chip">🚚 التوصيل والدفع</button>
+    <button class="chat-chip">🎯 عروض اليوم</button>
+    <button class="chat-chip">🔁 سياسة الاستبدال</button>
+  </div>
+  <div class="view-foot">
+    <form class="chat-input-row" id="chatForm">
+      <input type="text" id="chatInput" placeholder="اكتب رسالتك…" autocomplete="off" aria-label="رسالة">
+      <button type="submit" class="chat-send" id="chatSend" aria-label="إرسال">➤</button>
+    </form>
+  </div>
+</section>
 
-  <footer class="site-footer" id="contact">
-    <div id="footerText">نرحب بطلباتكم على مدار الساعة 🤍</div>
-    <div class="row" style="justify-content:center;margin-top:10px;gap:16px;">
-      <a id="waLink" href="#" class="small">📱 واتساب</a>
-      <a id="msLink" href="#" class="small">💬 مسنجر</a>
-      <a href="/admin" class="small">🔐 الأدمن</a>
-    </div>
-  </footer>
+<!-- شاشة المفضلة -->
+<section class="app-view" id="viewFavs" aria-hidden="true">
+  <div class="view-head">
+    <button class="icon-btn-round" id="favsBack" aria-label="رجوع">→</button>
+    <h3>❤️ المفضلة</h3>
+  </div>
+  <div class="view-body no-bar" id="favsBody"></div>
+</section>
 
-  <a id="fab" class="fab" href="#" title="راسلنا على واتساب">💬</a>
+<!-- شاشة طلباتي / تتبع الطلب -->
+<section class="app-view" id="viewOrders" aria-hidden="true">
+  <div class="view-head">
+    <button class="icon-btn-round" id="ordersBack" aria-label="رجوع">→</button>
+    <h3>📦 طلباتي</h3>
+  </div>
+  <div class="view-body no-bar" id="ordersBody"></div>
+</section>
 
-  <div id="drawerOverlay" class="drawer-overlay hidden"></div>
-  <aside id="cartDrawer" class="drawer hidden">
-    <div class="drawer-head"><h3 style="margin:0;">🛒 سلة المشتريات</h3><button class="icon-btn" id="closeCart">✕</button></div>
-    <div class="drawer-body" id="cartItems"></div>
-    <div class="drawer-foot">
-      <div class="between" style="margin-bottom:12px;"><b>الإجمالي</b><b id="cartTotal" style="color:var(--teal-dark);font-size:19px;">0</b></div>
-      <button class="btn btn-primary" id="checkoutBtn" style="width:100%;">إتمام الطلب</button>
-    </div>
-  </aside>
+<!-- زر تثبيت التطبيق -->
+<div class="install-banner" id="installBanner">
+  <div style="font-size:26px;">📱</div>
+  <div class="ib-txt"><b>ثبّت تطبيق LUNZERA</b><span>تجربة أسرع مثل تطبيقات الهاتف</span></div>
+  <button class="ib-go" id="installGo">تثبيت</button>
+  <button class="ib-x" id="installX" aria-label="إغلاق">✕</button>
+</div>
 
-  <!-- تطبيق زبوني: تنقل سفلي مثل تطبيقات الهاتف -->
-  <nav class="app-nav" aria-label="تطبيق">
-    <a href="#home" id="appNavHome" class="app-nav-item active" data-nav="home">🏠 <span>الرئيسية</span></a>
-    <a href="#products" id="appNavStore" class="app-nav-item" data-nav="store">🛍️ <span>المتجر</span></a>
-    <button type="button" id="appNavCart" class="app-nav-item" data-nav="cart">🛒 <span>السلة</span></button>
-    <button type="button" id="appNavChat" class="app-nav-item" data-nav="chat">💬 <span>الدردشة</span></button>
-  </nav>
+<!-- السلة -->
+<div id="drawerOverlay" class="drawer-overlay hidden"></div>
+<aside id="cartDrawer" class="drawer hidden">
+  <div class="drawer-head"><h3 style="margin:0;">🛒 سلة المشتريات</h3><button class="icon-btn" id="closeCart">✕</button></div>
+  <div class="drawer-body" id="cartItems"></div>
+  <div class="drawer-foot">
+    <div class="between" style="margin-bottom:12px;"><b>الإجمالي</b><b id="cartTotal" style="color:var(--teal-dark);font-size:19px;">0</b></div>
+    <button class="btn btn-primary" id="checkoutBtn" style="width:100%;">إتمام الطلب</button>
+  </div>
+</aside>
 
-  <div id="modalRoot"></div>
-  <div id="toast"></div>
+<div id="modalRoot"></div>
+<div id="toast"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/js/common.js"></script>
-  <script src="/js/store.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/store.js"></script>
 </body>
 </html>

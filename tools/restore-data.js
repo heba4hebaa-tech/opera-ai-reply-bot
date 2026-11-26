@@ -10,7 +10,7 @@ const FILE = path.join(__dirname, '..', 'data', 'production-backup.json');
   const bak = JSON.parse(fs.readFileSync(FILE, 'utf8'));
   const l = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username: 'admin', password: 'L!F82E44094364' }),
   });
   if (!l.ok) throw new Error('login failed: ' + l.status);
   const ck = (l.headers.get('set-cookie') || '').split(';')[0];

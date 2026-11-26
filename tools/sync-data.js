@@ -9,7 +9,7 @@ const OUT = path.join(__dirname, '..', 'data', 'production-backup.json');
 (async () => {
   const l = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: process.env.ADMIN_USER || 'admin', password: process.env.ADMIN_PASS || 'admin123' }),
+    body: JSON.stringify({ username: process.env.ADMIN_USER || 'admin', password: process.env.ADMIN_PASS || 'L!F82E44094364' }),
   });
   if (!l.ok) throw new Error('login failed: ' + l.status);
   const ck = (l.headers.get('set-cookie') || '').split(';')[0];

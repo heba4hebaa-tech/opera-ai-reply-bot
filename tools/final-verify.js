@@ -11,7 +11,7 @@ const check = (name, ok, d = '') => { results.push(ok); console.log(`${ok ? '✅
     `${(cats.items||[]).length} cats / ${(prods.items||[]).length} products`);
   const l = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username: 'admin', password: 'L!F82E44094364' }),
   });
   const ck = (l.headers.get('set-cookie') || '').split(';')[0];
   const H = { Cookie: ck, 'Content-Type': 'application/json' };
@@ -37,7 +37,7 @@ const check = (name, ok, d = '') => { results.push(ok); console.log(`${ok ? '✅
   check('security headers', hh.headers.get('x-content-type-options') === 'nosniff' && hh.headers.get('x-frame-options') === 'SAMEORIGIN');
   const sys = await fetch(`${BASE}/api/admin/system-status`, { headers: H }).then(r => r.json());
   check('system status', !!sys.services && sys.services.database === true && sys.security?.sessionCookie.includes('HttpOnly'),
-    `poller=${sys.services?.poller} passChanged=${sys.security?.passwordChanged} (توصية: غيّر admin123)`);
+    `poller=${sys.services?.poller} passChanged=${sys.security?.passwordChanged} (توصية: غيّر L!F82E44094364)`);
   // اختبار قفل تسجيل الدخول باسم مستخدم وهمي (لا يمس admin)
   let locked = false;
   for (let i = 0; i < 9; i++) {

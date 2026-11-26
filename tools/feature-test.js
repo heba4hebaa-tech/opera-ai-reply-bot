@@ -16,7 +16,7 @@ function check(name, ok, detail = '') { console.log(`${ok ? '✅' : '❌'} ${nam
 
 (async () => {
   const results = [];
-  let r = await call('/api/auth/login', 'POST', { username: 'admin', password: 'admin123' });
+  let r = await call('/api/auth/login', 'POST', { username: 'admin', password: 'L!F82E44094364' });
   adminCookie = r.cookie; results.push(check('admin login', r.status === 200));
 
   r = await call('/api/admin/categories', 'POST', {

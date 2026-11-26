@@ -4,7 +4,7 @@ const base = process.env.BASE || 'http://localhost:3000';
 (async () => {
   const login = await fetch(`${base}/api/auth/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username: 'admin', password: 'L!F82E44094364' }),
   });
   const cookie = (login.headers.get('set-cookie') || '').split(';')[0];
   const res = await fetch(`${base}/api/admin/test-reply`, {

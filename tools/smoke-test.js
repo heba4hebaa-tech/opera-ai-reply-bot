@@ -39,7 +39,7 @@ async function request(path, method = 'GET', body) {
   r = await request('/api/admin/dashboard');
   check('admin requires auth', r.status === 401);
 
-  r = await request('/api/auth/login', 'POST', { username: 'admin', password: 'admin123' });
+  r = await request('/api/auth/login', 'POST', { username: 'admin', password: 'L!F82E44094364' });
   check('login', r.status === 200 && r.data.ok);
   check('session cookie', !!cookie);
 

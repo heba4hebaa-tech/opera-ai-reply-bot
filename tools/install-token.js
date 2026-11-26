@@ -7,7 +7,7 @@ const TOKEN = fs.readFileSync(path.join(__dirname, '..', 'data', '.page-token'),
 (async () => {
   const l = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username: 'admin', password: 'L!F82E44094364' }),
   });
   const ck = (l.headers.get('set-cookie') || '').split(';')[0];
   const H = { Cookie: ck, 'Content-Type': 'application/json' };

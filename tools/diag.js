@@ -5,7 +5,7 @@ const BASE = 'https://opera-ai-reply-bot.onrender.com';
   console.log('HEALTH', JSON.stringify(h));
   const l = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username: 'admin', password: 'L!F82E44094364' }),
   });
   console.log('LOGIN', l.status);
   const ck = (l.headers.get('set-cookie') || '').split(';')[0];

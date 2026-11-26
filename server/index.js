@@ -584,6 +584,68 @@ function activeAds(placement) {
   });
 }
 add('GET', '/api/ads', ({ query }) => ({ items: activeAds(query.get('placement') || '') }));
+
+// ------------------------- public app APIs (تطبيق الزبون التفاعلي) -------------------------
+const rlBuckets = new Map(); // key -> { count, first }
+function rateLimit(key, max, windowMs) {
+  const t = Date.now();
+  let b = rlBuckets.get(key);
+  if (!b || t - b.first > windowMs) { b = { count: 0, first: t }; rlBuckets.set(key, b); }
+  b.count++;
+  if (rlBuckets.size > 5000) rlBuckets.clear();
+  return b.count <= max;
+}
+
+// دردشة داخلية عامة مع المساعد الذكي (مثل تطبيقات العالم)
+add('POST', '/api/chat', async ({ body, req }) => {
+  const message = str(body.message).slice(0, 2000);
+  if (!message) return { status: 400, body: { error: 'اكتب رسالتك' } };
+  if (!rateLimit(`chat:${clientIp(req)}`, 20, 60000)) return { status: 429, body: { error: 'رسائل كثيرة — انتظر دقيقة ثم أعد المحاولة' } };
+  const history = Array.isArray(body.history) ? body.history.slice(-10) : [];
+  const reply = await generateReply(message, history);
+  return { ok: true, reply: String(reply || '').slice(0, 4000) };
+});
+
+// تقييمات المنتجات — عامة
+add('GET', '/api/reviews', ({ query }) => {
+  const pid = num(query.get('product_id') || 0);
+  const items = pid
+    ? all('SELECT id, product_id, customer_name, rating, text, created_at FROM reviews WHERE product_id=? ORDER BY id DESC LIMIT 30', pid)
+    : all('SELECT id, product_id, customer_name, rating, text, created_at FROM reviews ORDER BY id DESC LIMIT 50');
+  return { items };
+});
+add('POST', '/api/reviews', ({ body, req }) => {
+  const pid = num(body.product_id);
+  if (!pid) return { status: 400, body: { error: 'المنتج غير محدد' } };
+  if (!rateLimit(`rev:${clientIp(req)}`, 10, 600000)) return { status: 429, body: { error: 'يمكنك إرسال مراجعة كل 10 دقائق' } };
+  const name = str(body.customer_name).slice(0, 120);
+  const text = str(body.text).slice(0, 1000);
+  if (!name || !text) return { status: 400, body: { error: 'الاسم والمراجعة مطلوبان' } };
+  const rating = Math.max(1, Math.min(5, num(body.rating) || 5));
+  const info = run('INSERT INTO reviews (product_id, order_id, customer_name, phone, rating, text, created_at) VALUES (?,?,?,?,?,?,?)',
+    pid, num(body.order_id), name, str(body.phone).slice(0, 40), rating, text, now());
+  return { ok: true, id: Number(info.lastInsertRowid) };
+});
+
+// الأسئلة الشائعة — عامة
+add('GET', '/api/faqs', () => ({ items: all('SELECT id, question, answer FROM faqs WHERE active=1 ORDER BY id') }));
+
+// تتبع الطلب — عامة (بمطابقة رقم الجوال)
+add('GET', '/api/orders/track', ({ query }) => {
+  const id = num(query.get('id'));
+  const phone = normalizePhone(query.get('phone') || '');
+  const o = get('SELECT id, status, total, created_at, delivery_method, items_json FROM orders WHERE id=?', id);
+  if (!o) return { status: 404, body: { error: 'لم نجد طلباً بهذا الرقم' } };
+  const op = normalizePhone(o.phone || '');
+  if (!phone || phone !== op) return { status: 403, body: { error: 'رقم الجوال غير مطابق لهذا الطلب' } };
+  let items = [];
+  try { items = JSON.parse(o.items_json || '[]'); } catch { items = []; }
+  return { ok: true, order: {
+    id: o.id, status: o.status, total: o.total, created_at: o.created_at, delivery_method: o.delivery_method,
+    items: Array.isArray(items) ? items.map(i => ({ name: i.name, qty: i.qty, price: i.price })) : [],
+  } };
+});
+
 add('GET', '/api/admin/ads', () => ({ items: all('SELECT * FROM ads ORDER BY priority DESC, id DESC') }), { auth: true });
 add('POST', '/api/admin/ads', ({ body }) => {
   const info = run(`INSERT INTO ads (title,body,image_url,link_url,cta,kind,placement,active,priority,start_at,end_at,created_at,updated_at)
