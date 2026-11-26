@@ -24,6 +24,18 @@ const OUT = path.join(__dirname, '..', 'data', 'production-backup.json');
   // إزالة الأسرار حتى لا تُرفع إلى المستودع (تعتمد على متغيرات بيئة Render)
   const SECRET_KEYS = ['wa_access_token', 'messenger_page_token', 'facebook_page_token'];
   const settings = { ...(settingsResp.settings || {}) };
+  // حفظ الأسرار في ملف محلي مُتجاهَل من Git (data/) ليُعاد حقنها بعد النشر ولا تُفقد
+  const secrets = {};
+  for (const k of SECRET_KEYS) if (settings[k]) secrets[k] = settings[k];
+  // معرّفات الصفحة والأرقام ليست أسراراً لكنها أساسية — نحفظها في ملف الأسرار أيضاً كاحتياط
+  for (const k of ['messenger_page_id', 'facebook_page_id', 'messenger_link', 'wa_phone_number_id', 'whatsapp_number'])
+    if (settings[k]) secrets[k] = settings[k];
+  const secretsFile = path.join(path.dirname(OUT), '.secrets.json');
+  // دمج مع الأسرار المحفوظة سابقاً حتى لا نفقد أي شيء إن كانت الإنتاج فارغة حالياً
+  let prev = {};
+  try { if (fs.existsSync(secretsFile)) prev = JSON.parse(fs.readFileSync(secretsFile, 'utf8')); } catch {}
+  const mergedSecrets = { ...prev, ...secrets };
+  fs.writeFileSync(secretsFile, JSON.stringify(mergedSecrets, null, 1), 'utf8');
   for (const k of SECRET_KEYS) delete settings[k];
   const out = {
     version: 1,

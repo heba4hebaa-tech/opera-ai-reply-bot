@@ -20,8 +20,19 @@ const FILE = path.join(__dirname, '..', 'data', 'production-backup.json');
   const r = await fetch(`${BASE}/api/admin/restore`, { method: 'POST', headers: H, body: JSON.stringify({ data: payload }) }).then(x => x.json());
   console.log('restore tables:', JSON.stringify(r));
   if (bak.settings && Object.keys(bak.settings).length) {
-    const s = await fetch(`${BASE}/api/admin/settings`, { method: 'PUT', headers: H, body: JSON.stringify(bak.settings) }).then(x => x.json());
-    console.log('restore settings:', JSON.stringify(s));
+    // دمج الأسرار المحفوظة محلياً (data/.secrets.json، مُتجاهَل من Git) وتوكن الصفحة المحفوظ لإعادة الحقن بعد النشر
+    const settingsOut = { ...bak.settings };
+    const secretsFile = path.join(__dirname, '..', 'data', '.secrets.json');
+    if (fs.existsSync(secretsFile)) {
+      try { Object.assign(settingsOut, JSON.parse(fs.readFileSync(secretsFile, 'utf8'))); } catch {}
+    }
+    const pageTokenFile = path.join(__dirname, '..', 'data', '.page-token');
+    if (!settingsOut.messenger_page_token && fs.existsSync(pageTokenFile)) {
+      const t = fs.readFileSync(pageTokenFile, 'utf8').trim();
+      if (t) settingsOut.messenger_page_token = t;
+    }
+    const s = await fetch(`${BASE}/api/admin/settings`, { method: 'PUT', headers: H, body: JSON.stringify(settingsOut) }).then(x => x.json());
+    console.log('restore settings:', JSON.stringify(s), '| keys:', Object.keys(settingsOut).length);
   }
   const d = await fetch(`${BASE}/api/admin/dashboard`, { headers: H }).then(x => x.json());
   const st = d.stats || {};
