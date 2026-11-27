@@ -242,7 +242,7 @@ add('GET', '/api/store/info', () => {
 });
 
 add('GET', '/api/store/categories', () => ({
-  items: all('SELECT id, name_ar, name_en, description, icon, has_options, colors_json, sizes_json FROM categories WHERE active = 1 ORDER BY sort_order, id'),
+  items: all('SELECT id, name_ar, name_en, description, icon, has_options, colors_json, sizes_json, parent_id FROM categories WHERE active = 1 ORDER BY sort_order, id'),
 }));
 
 // تحويل المتغيرات (لون/مقاس/كمية) إلى صيغة موحّدة
@@ -264,9 +264,14 @@ add('GET', '/api/store/products', ({ query }) => {
   const cat = Number(query.get('category') || 0);
   const q = str(query.get('q') || '');
   const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json, color_hex_json, variants_json, (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS rating_count';
-  const rows = cat
-    ? all(`SELECT ${fields} FROM products p WHERE active=1 AND category_id=? ORDER BY p.id DESC`, cat)
-    : all(`SELECT ${fields} FROM products p WHERE active=1 ORDER BY p.id DESC`);
+  let rows;
+  if (cat) {
+    const ids = [cat, ...all('SELECT id FROM categories WHERE parent_id=?', cat).map(r => Number(r.id))];
+    const marks = ids.map(() => '?').join(',');
+    rows = all(`SELECT ${fields} FROM products p WHERE active=1 AND category_id IN (${marks}) ORDER BY p.id DESC`, ...ids);
+  } else {
+    rows = all(`SELECT ${fields} FROM products p WHERE active=1 ORDER BY p.id DESC`);
+  }
   return { items: q ? rows.filter(p => (p.name_ar + p.name_en + p.description).toLowerCase().includes(q.toLowerCase())) : rows };
 });
 
@@ -486,16 +491,16 @@ add('GET', '/api/admin/categories', () => ({ items: all('SELECT * FROM categorie
 add('POST', '/api/admin/categories', ({ body }) => {
   const name = str(body.name_ar);
   if (!name) return { status: 400, body: { error: 'اسم الصنف مطلوب' } };
-  const info = run('INSERT INTO categories (name_ar,name_en,description,icon,active,sort_order,has_options,colors_json,sizes_json,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+  const info = run('INSERT INTO categories (name_ar,name_en,description,icon,active,sort_order,has_options,colors_json,sizes_json,parent_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
     name, str(body.name_en), str(body.description), str(body.icon) || '📦', body.active === false ? 0 : 1,
-    num(body.sort_order), body.has_options ? 1 : 0, str(body.colors_json), str(body.sizes_json), now());
+    num(body.sort_order), body.has_options ? 1 : 0, str(body.colors_json), str(body.sizes_json), num(body.parent_id), now());
   return { ok: true, id: Number(info.lastInsertRowid) };
 }, { auth: true });
 add('PUT', '/api/admin/categories/:id', ({ params, body }) => {
   const id = num(params.id);
-  run('UPDATE categories SET name_ar=?,name_en=?,description=?,icon=?,active=?,sort_order=?,has_options=?,colors_json=?,sizes_json=? WHERE id=?',
+  run('UPDATE categories SET name_ar=?,name_en=?,description=?,icon=?,active=?,sort_order=?,has_options=?,colors_json=?,sizes_json=?,parent_id=? WHERE id=?',
     str(body.name_ar), str(body.name_en), str(body.description), str(body.icon) || '📦', body.active === false ? 0 : 1,
-    num(body.sort_order), body.has_options ? 1 : 0, str(body.colors_json), str(body.sizes_json), id);
+    num(body.sort_order), body.has_options ? 1 : 0, str(body.colors_json), str(body.sizes_json), num(body.parent_id), id);
   return { ok: true };
 }, { auth: true });
 add('DELETE', '/api/admin/categories/:id', ({ params }) => {

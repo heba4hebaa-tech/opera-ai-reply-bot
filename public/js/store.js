@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  const state = { info: {}, categories: [], products: [], activeCat: 0, cart: [], customer: null, ads: [], query: '', chat: [], chatBusy: false, notifications: [], seenNotifs: [] };
+  const state = { info: {}, categories: [], products: [], activeCat: 0, activeParent: 0, cart: [], customer: null, ads: [], query: '', chat: [], chatBusy: false, notifications: [], seenNotifs: [] };
   try { state.seenNotifs = JSON.parse(localStorage.getItem('opera_seen_notifs') || '[]') || []; } catch { state.seenNotifs = []; }
   try { state.cart = JSON.parse(localStorage.getItem('opera_cart') || '[]') || []; } catch { state.cart = []; }
   try { state.chat = JSON.parse(localStorage.getItem('opera_chat') || '[]') || []; } catch { state.chat = []; }
@@ -462,12 +462,32 @@
   }
 
   function renderChips() {
+    const parents = state.categories.filter(c => !Number(c.parent_id));
     $('categoryChips').innerHTML = `<button class="chip${state.activeCat === 0 ? ' active' : ''}" data-cat="0">الكل</button>` +
-      state.categories.map(c => `<button class="chip${state.activeCat === c.id ? ' active' : ''}" data-cat="${c.id}">${esc(c.icon && !c.icon.startsWith('/') ? c.icon : '📦')} ${esc(c.name_ar)}</button>`).join('');
+      parents.map(c => {
+        const kids = state.categories.filter(x => Number(x.parent_id) === c.id);
+        return `<button class="chip${state.activeCat === c.id || state.activeParent === c.id ? ' active' : ''}" data-cat="${c.id}">${esc(c.icon && !c.icon.startsWith('/') ? c.icon : '📦')} ${esc(c.name_ar)}${kids.length ? ' ▾' : ''}</button>`;
+      }).join('');
     $('categoryChips').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => {
       const catId = Number(b.dataset.cat);
-      if (catId === 0) { state.activeCat = 0; renderChips(); renderProducts(); return; }
-      openCategory(catId);
+      if (catId === 0) { state.activeCat = 0; state.activeParent = 0; $('subChips').style.display = 'none'; renderChips(); renderProducts(); return; }
+      state.activeParent = catId; state.activeCat = catId;
+      renderChips(); renderSubChips(); renderProducts();
+      $('products')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    renderSubChips();
+  }
+  function renderSubChips() {
+    const box = $('subChips'); if (!box) return;
+    const kids = state.categories.filter(x => Number(x.parent_id) === state.activeParent);
+    if (!kids.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = 'flex';
+    box.innerHTML = `<span class="small muted" style="align-self:center;margin-inline-end:4px;">🔻 فلترة:</span>` +
+      `<button class="chip${state.activeCat === state.activeParent ? ' active' : ''}" data-sub="${state.activeParent}">الكل</button>` +
+      kids.map(c => `<button class="chip${state.activeCat === c.id ? ' active' : ''}" data-sub="${c.id}">${esc(c.name_ar)}</button>`).join('');
+    box.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => {
+      state.activeCat = Number(b.dataset.sub);
+      renderChips(); renderSubChips(); renderProducts();
     });
   }
 
@@ -650,7 +670,12 @@
   function renderProducts() {
     const norm = s => String(s || '').toLowerCase();
     const q = norm(state.query);
-    let list = state.activeCat ? state.products.filter(p => p.category_id === state.activeCat) : state.products;
+    let list;
+    if (!state.activeCat) list = state.products;
+    else {
+      const ids = [state.activeCat, ...state.categories.filter(c => Number(c.parent_id) === state.activeCat).map(c => c.id)];
+      list = state.products.filter(p => ids.includes(p.category_id));
+    }
     if (q) list = list.filter(p => norm(p.name_ar).includes(q) || norm(p.name_en).includes(q) || norm(p.description).includes(q));
     const pc = $('productCount'); if (pc) pc.textContent = `${list.length} منتج`;
     const grid = $('productGrid'); if (!grid) return;

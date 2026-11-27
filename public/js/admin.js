@@ -145,7 +145,7 @@
     const d = await api('/api/admin/categories');
     state.categories = d.items || [];
     $('categoryRows').innerHTML = state.categories.length ? state.categories.map(c => `<tr>
-      <td>${c.sort_order}</td><td><b>${esc(c.icon)} ${esc(c.name_ar)}</b><div class="small muted">${esc(c.name_en || '')}</div></td>
+      <td>${c.sort_order}</td><td><b>${esc(c.icon)} ${esc(c.name_ar)}</b>${Number(c.parent_id) ? `<div class="small muted">← فرعي من: ${esc(state.categories.find(x => x.id === Number(c.parent_id))?.name_ar || '—')}</div>` : ''}<div class="small muted">${esc(c.name_en || '')}</div></td>
       <td class="small muted">${esc(c.description || '—')}</td>
       <td><span class="pill ${c.active ? 'ok' : 'bad'}">${c.active ? 'نشط' : 'مخفي'}</span></td>
       <td><button class="btn btn-ghost btn-sm" data-ec="${c.id}">تعديل</button> <button class="btn btn-danger btn-sm" data-dc="${c.id}">حذف</button></td>
@@ -164,6 +164,10 @@
       <div class="form-row"><label>الوصف</label><input name="description" value="${esc(c.description || '')}"></div>
       <div class="form-row two"><div><label>الرمز (إيموجي أو صورة)</label><input name="icon" id="catIcon" value="${esc(c.icon || '📦')}"></div>
       <div><label>ارفع أيقونة من جهازك</label><input type="file" id="catIconFile" accept="image/*"><div id="catIconPreview" class="small" style="margin-top:6px;"></div></div></div>
+      <div class="form-row"><label>الصنف الأب (اختياري — لعمل تصنيفات فرعية مثل: حقائب ← حقائب يد، حقائب سفر)</label>
+        <select name="parent_id"><option value="0">— صنف رئيسي —</option>
+          ${state.categories.filter(x => x.id !== c.id && !x.parent_id).map(x => `<option value="${x.id}" ${Number(c.parent_id) === x.id ? 'selected' : ''}>${esc(x.icon || '📦')} ${esc(x.name_ar)}</option>`).join('')}
+        </select></div>
       <div class="form-row check"><input type="checkbox" name="has_options" ${c.has_options ? 'checked' : ''}><label>هذا الصنف له ألوان ومقاسات</label></div>
       <div class="form-row two"><div><label>الألوان (افصل بفاصلة)</label><input name="colors_json" value="${esc(Array.isArray(c.colors_json) ? c.colors_json.join('، ') : (typeof c.colors_json === 'string' ? c.colors_json.replace(/[\[\]"]/g, '') : ''))}" placeholder="أحمر، أزرق، أسود"></div>
       <div><label>المقاسات (افصل بفاصلة)</label><input name="sizes_json" value="${esc(Array.isArray(c.sizes_json) ? c.sizes_json.join('، ') : (typeof c.sizes_json === 'string' ? c.sizes_json.replace(/[\[\]"]/g, '') : ''))}" placeholder="S، M، L، XL"></div></div>
@@ -178,6 +182,7 @@
       const payload = {
         name_ar: f.get('name_ar'), name_en: f.get('name_en'), description: f.get('description'),
         icon: f.get('icon'), sort_order: Number(f.get('sort_order')), active: f.get('active') === 'on',
+        parent_id: Number(f.get('parent_id')) || 0,
         has_options: f.get('has_options') === 'on',
         colors_json: JSON.stringify(splitOpts(f.get('colors_json'))),
         sizes_json: JSON.stringify(splitOpts(f.get('sizes_json'))),
@@ -209,7 +214,8 @@
 
   function productForm(p) {
     p = p || {};
-    const options = state.categories.map(c => `<option value="${c.id}" ${p.category_id === c.id ? 'selected' : ''}>${esc(c.name_ar)}</option>`).join('');
+    const catLabel = c => { const par = state.categories.find(x => x.id === Number(c.parent_id)); return par ? `${par.name_ar} ← ${c.name_ar}` : c.name_ar; };
+    const options = state.categories.map(c => `<option value="${c.id}" ${p.category_id === c.id ? 'selected' : ''}>${esc(catLabel(c))}</option>`).join('');
     const m = modal(p.id ? 'تعديل المنتج' : 'منتج جديد', `<form id="prodForm">
       <div class="form-row two"><div><label>الاسم بالعربية *</label><input name="name_ar" value="${esc(p.name_ar || '')}" required></div>
       <div><label>الاسم بالإنجليزية</label><input name="name_en" value="${esc(p.name_en || '')}"></div></div>
