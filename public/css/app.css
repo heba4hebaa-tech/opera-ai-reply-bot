@@ -657,3 +657,38 @@ html:not([data-theme="dark"]) .site-footer .ft-copy { border-top-color: var(--ap
   .feat-grid { gap: 10px; }
   .feat-card { padding: 14px 10px; }
 }
+
+/* ============================================================
+   اختيار الألوان والمقاسات في بطاقات المنتج — دوائر وأزرار
+   (بديل القوائم المنسدلة)
+   ============================================================ */
+.card-opt { display: flex; align-items: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
+.card-opt .co-lab { font-size: 10.5px; font-weight: 800; color: var(--app-muted); flex: 0 0 auto; }
+.card-dots { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+.c-dot {
+  width: 24px; height: 24px; min-width: 24px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 2px solid var(--app-card); box-shadow: 0 0 0 1.6px var(--app-line), 0 3px 7px -3px rgba(0,0,0,.45);
+  transition: transform .18s var(--app-ease), box-shadow .18s; position: relative;
+}
+.c-dot:hover { transform: scale(1.14); }
+.c-dot:active { transform: scale(.88); }
+.c-dot.active { box-shadow: 0 0 0 2.5px var(--app-brand-2), 0 4px 10px -3px rgba(20,184,166,.6); transform: scale(1.14); }
+.c-dot.active::after {
+  content: '✓'; position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 12px; font-weight: 900; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.85);
+}
+.c-dot[style*="#ffffff"].active::after, .c-dot[style*="#fff"].active::after { color: #111827; text-shadow: none; }
+.card-sizes { display: flex; gap: 6px; flex-wrap: wrap; }
+.c-size {
+  min-width: 30px; height: 26px; padding: 0 9px; border-radius: 9px; cursor: pointer;
+  border: 1.5px solid var(--app-line); background: var(--app-bg); color: var(--app-ink);
+  font-size: 11.5px; font-weight: 800; font-family: inherit; line-height: 1;
+  transition: all .18s var(--app-ease);
+}
+.c-size:hover { border-color: var(--app-brand-2); }
+.c-size:active { transform: scale(.9); }
+.c-size.active {
+  background: linear-gradient(135deg, var(--app-brand), var(--app-brand-2));
+  color: #fff; border-color: transparent; box-shadow: 0 6px 14px -7px rgba(15,118,110,.9);
+}
+.c-size.oos { opacity: .35; text-decoration: line-through; cursor: not-allowed; }

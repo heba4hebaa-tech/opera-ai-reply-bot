@@ -864,8 +864,8 @@
       const out = Number(p.stock) <= 0;
       const discount = Number(p.discount_percent) || (p.old_price && Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0);
       const opts = (colors.length || sizes.length) ? `
-        ${colors.length ? `<select data-color="${p.id}" class="small" style="width:100%;margin-top:6px;border-radius:10px;padding:7px;border:1px solid var(--app-line);background:var(--app-bg);color:inherit;">${colors.map(c => `<option>${esc(c)}</option>`).join('')}</select>` : ''}
-        ${sizes.length ? `<select data-size="${p.id}" class="small" style="width:100%;margin-top:6px;border-radius:10px;padding:7px;border:1px solid var(--app-line);background:var(--app-bg);color:inherit;">${sizes.map(s => `<option>${esc(s)}</option>`).join('')}</select>` : ''}` : '';
+        ${colors.length ? `<div class="card-opt"><span class="co-lab">اللون</span><div class="card-dots">${colors.map((c,i)=>`<button type="button" class="c-dot${i===0?' active':''}" data-color="${p.id}" data-val="${esc(c)}" title="${esc(c)}" style="background:${esc(hexMap[c] || '#cbd5e1')}" aria-label="${esc(c)}"></button>`).join('')}</div></div>` : ''}
+        ${sizes.length ? `<div class="card-opt"><span class="co-lab">المقاس</span><div class="card-sizes">${sizes.map((s,i)=>`<button type="button" class="c-size${i===0?' active':''}" data-size="${p.id}" data-val="${esc(s)}">${esc(s)}</button>`).join('')}</div></div>` : ''}` : '';
       const stockCls = out ? 'out' : (Number(p.stock) <= 5 ? 'low' : '');
       return `<article class="p-card${out ? ' stock-out' : ''}" data-detail="${p.id}" style="animation-delay:${Math.min(idx * 45, 400)}ms">
         <div class="p-media" id="pimg-${p.id}">
@@ -885,14 +885,24 @@
         </div>
       </article>`;
     }).join('');
-    grid.querySelectorAll('[data-color]').forEach(s => s.onchange = () => {
-      const id = Number(s.dataset.color);
+    grid.querySelectorAll('[data-color]').forEach(b => b.onclick = e => {
+      e.stopPropagation();
+      const id = Number(b.dataset.color);
+      const wrap = b.parentElement;
+      wrap?.querySelectorAll('.c-dot').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
       const p = state.products.find(x => x.id === id);
       const map = parseJson(p?.color_images_json, {});
       const gallery = parseJson(p?.images_json, []);
-      const url = map[s.value] || gallery[0] || p?.image_url;
+      const url = map[b.dataset.val] || gallery[0] || p?.image_url;
       const el = $(`pimg-${id}`);
       if (el && url && String(url).match(/^\/|^https?:/)) el.innerHTML = `<img src="${esc(url)}" alt="" onerror="this.remove()">`;
+    });
+    grid.querySelectorAll('[data-size]').forEach(b => b.onclick = e => {
+      e.stopPropagation();
+      const wrap = b.parentElement;
+      wrap?.querySelectorAll('.c-size').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
     });
     grid.querySelectorAll('[data-fav]').forEach(b => b.onclick = e => {
       e.stopPropagation();
@@ -905,8 +915,8 @@
       e.stopPropagation();
       const id = Number(b.dataset.add);
       const card = b.closest('.p-card');
-      const color = card?.querySelector(`[data-color="${id}"]`)?.value || '';
-      const size = card?.querySelector(`[data-size="${id}"]`)?.value || '';
+      const color = card?.querySelector('.c-dot.active')?.dataset.val || '';
+      const size = card?.querySelector('.c-size.active')?.dataset.val || '';
       addToCart(id, [color, size].filter(Boolean).join(' / '), { color, size });
     });
     grid.querySelectorAll('[data-detail]').forEach(b => b.onclick = e => {
