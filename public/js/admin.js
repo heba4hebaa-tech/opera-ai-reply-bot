@@ -200,7 +200,7 @@
     $('productRows').innerHTML = state.products.length ? state.products.map(p => `<tr>
       <td><b>${esc(p.icon)} ${esc(p.name_ar)}</b><div class="small muted">${money(p.price, '')} · ${esc(p.name_en || '')}</div></td>
       <td class="small">${esc(catName(p.category_id))}</td>
-      <td><b style="color:var(--teal-dark);">${money(p.price, '')}</b>${p.old_price ? `<div class="small muted"><s>${money(p.old_price, '')}</s></div>` : ''}</td>
+      <td><b style="color:var(--teal-dark);">${money(p.price, '')}</b>${p.old_price ? `<div class="small muted"><s>${money(p.old_price, '')}</s></div>` : ''}${Number(p.discount_percent) ? `<div class="pill warn">خصم ${p.discount_percent}%</div>` : ''}</td>
       <td>${p.stock}</td>
       <td>${p.avg_rating ? `⭐ ${Number(p.avg_rating).toFixed(1)} (${p.rating_count} تقييم)` : '—'}</td>
       <td><span class="pill ${p.active ? 'ok' : 'bad'}">${p.active ? 'نشط' : 'مخفي'}</span></td>
@@ -235,6 +235,8 @@
       <div class="form-row"><label>رابط الصورة (يُملأ تلقائياً عند الرفع)</label><input name="image_url" id="prodImageUrl" value="${esc(p.image_url || '')}" placeholder="/uploads/..."></div>
       <div class="form-row two"><div><label>السعر</label><input name="price" type="number" step="0.01" value="${p.price || 0}"></div>
       <div><label>السعر قبل الخصم</label><input name="old_price" type="number" step="0.01" value="${p.old_price || 0}"></div></div>
+      <div class="form-row two"><div><label>🔥 الخصم % (يحسب السعر قبل الخصم تلقائياً)</label><input name="discount_percent" id="prodDiscount" type="number" min="0" max="99" step="1" value="${p.discount_percent || 0}" placeholder="مثال: 50"></div>
+      <div class="small muted" id="discountHint" style="align-self:center;">اكتب نسبة الخصم وسيظهر المنتج في المتجر بشارة «خصم ٥٠٪»</div></div>
       <div class="form-row two"><div><label>المخزون</label><input name="stock" type="number" value="${p.stock || 0}"></div>
       <div><label>ألوان هذا المنتج (فارغ = من الصنف)</label>
         <input type="hidden" name="colors_json" value="${esc(p.colors_json || '[]')}">
@@ -274,6 +276,13 @@
       <div class="form-row check"><input type="checkbox" name="active" ${p.active === 0 ? '' : 'checked'}><label>ظاهر للزبائن</label></div>
       <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary">حفظ</button></div>
     </form>`, { wide: true });
+    m.el.querySelector('[name=discount_percent]')?.addEventListener('input', e => {
+      const d = Number(e.target.value) || 0;
+      const price = Number(m.el.querySelector('[name=price]')?.value) || 0;
+      const oldEl = m.el.querySelector('[name=old_price]');
+      if (oldEl) oldEl.value = (d > 0 && price > 0) ? Math.round(price / (1 - Math.min(99, d) / 100) * 100) / 100 : 0;
+      const hint = $('discountHint'); if (hint) hint.textContent = d > 0 ? `سيظهر في المتجر: خصم ${d}%` : 'اكتب نسبة الخصم وسيظهر المنتج في المتجر بشارة خصم';
+    });
     bindUpload('prodImageFile', 'prodImageUrl', 'prodImagePreview');
     bindUpload('prodIconFile', 'prodIcon', 'prodIconPreview');
 
@@ -447,7 +456,8 @@
       const payload = {
         name_ar: f.get('name_ar'), name_en: f.get('name_en'), description: f.get('description'),
         category_id: Number(f.get('category_id')) || null, icon: f.get('icon'), price: Number(f.get('price')),
-        old_price: Number(f.get('old_price')), stock: Number(f.get('stock')), image_url: f.get('image_url'),
+        old_price: Number(f.get('old_price')), discount_percent: Number(f.get('discount_percent')) || 0,
+        stock: Number(f.get('stock')), image_url: f.get('image_url'),
         colors_json: f.get('colors_json') || '[]',
         color_hex_json: f.get('color_hex_json') || '{}',
         sizes_json: JSON.stringify(splitOpts(f.get('sizes_json'))),

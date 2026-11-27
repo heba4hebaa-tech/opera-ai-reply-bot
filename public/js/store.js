@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  const state = { info: {}, categories: [], products: [], activeCat: 0, activeParent: 0, cart: [], customer: null, ads: [], query: '', chat: [], chatBusy: false, notifications: [], seenNotifs: [] };
+  const state = { info: {}, categories: [], products: [], activeCat: 0, activeParent: 0, offersOnly: false, cart: [], customer: null, ads: [], query: '', chat: [], chatBusy: false, notifications: [], seenNotifs: [] };
   try { state.seenNotifs = JSON.parse(localStorage.getItem('opera_seen_notifs') || '[]') || []; } catch { state.seenNotifs = []; }
   try { state.cart = JSON.parse(localStorage.getItem('opera_cart') || '[]') || []; } catch { state.cart = []; }
   try { state.chat = JSON.parse(localStorage.getItem('opera_chat') || '[]') || []; } catch { state.chat = []; }
@@ -463,12 +463,20 @@
 
   function renderChips() {
     const parents = state.categories.filter(c => !Number(c.parent_id));
-    $('categoryChips').innerHTML = `<button class="chip${state.activeCat === 0 ? ' active' : ''}" data-cat="0">الكل</button>` +
+    $('categoryChips').innerHTML = `<button class="chip${state.activeCat === 0 && !state.offersOnly ? ' active' : ''}" data-cat="0">الكل</button>` +
+      `<button class="chip${state.offersOnly ? ' active' : ''}" data-offer="1">🔥 العروض</button>` +
       parents.map(c => {
         const kids = state.categories.filter(x => Number(x.parent_id) === c.id);
         return `<button class="chip${state.activeCat === c.id || state.activeParent === c.id ? ' active' : ''}" data-cat="${c.id}">${esc(c.icon && !c.icon.startsWith('/') ? c.icon : '📦')} ${esc(c.name_ar)}${kids.length ? ' ▾' : ''}</button>`;
       }).join('');
+    $('categoryChips').querySelector('[data-offer]')?.addEventListener('click', () => {
+      state.offersOnly = !state.offersOnly;
+      state.activeCat = 0; state.activeParent = 0;
+      $('subChips').style.display = 'none';
+      renderChips(); renderProducts();
+    });
     $('categoryChips').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => {
+      state.offersOnly = false;
       const catId = Number(b.dataset.cat);
       if (catId === 0) { state.activeCat = 0; state.activeParent = 0; $('subChips').style.display = 'none'; renderChips(); renderProducts(); return; }
       state.activeParent = catId; state.activeCat = catId;
@@ -529,7 +537,7 @@
     const hexMap = parseJson(p.color_hex_json, {});
     const related = state.products.filter(x => x.id !== p.id && x.category_id === p.category_id && Number(x.stock) > 0).slice(0, 6);
     const out = Number(p.stock) <= 0;
-    const discount = p.old_price && Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0;
+    const discount = Number(p.discount_percent) || (p.old_price && Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0);
     const mainImg = (colorMap[colors[0]] || images[0] || p.image_url || p.icon);
     pushRecent(p.id);
     const html = `<div class="pd">
@@ -671,7 +679,12 @@
     const norm = s => String(s || '').toLowerCase();
     const q = norm(state.query);
     let list;
-    if (!state.activeCat) list = state.products;
+    if (state.offersOnly) {
+      list = state.products.filter(p => {
+        const d = Number(p.discount_percent) || (Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0);
+        return d > 0 && Number(p.stock) > 0;
+      });
+    } else if (!state.activeCat) list = state.products;
     else {
       const ids = [state.activeCat, ...state.categories.filter(c => Number(c.parent_id) === state.activeCat).map(c => c.id)];
       list = state.products.filter(p => ids.includes(p.category_id));
@@ -690,7 +703,7 @@
     const hexMap = parseJson(p.color_hex_json, {});
       const first = colorMap[colors[0]] || images[0] || p.icon;
       const out = Number(p.stock) <= 0;
-      const discount = p.old_price && Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0;
+      const discount = Number(p.discount_percent) || (p.old_price && Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0);
       const opts = (colors.length || sizes.length) ? `
         ${colors.length ? `<select data-color="${p.id}" class="small" style="width:100%;margin-top:6px;border-radius:10px;padding:7px;border:1px solid var(--app-line);background:var(--app-bg);color:inherit;">${colors.map(c => `<option>${esc(c)}</option>`).join('')}</select>` : ''}
         ${sizes.length ? `<select data-size="${p.id}" class="small" style="width:100%;margin-top:6px;border-radius:10px;padding:7px;border:1px solid var(--app-line);background:var(--app-bg);color:inherit;">${sizes.map(s => `<option>${esc(s)}</option>`).join('')}</select>` : ''}` : '';
@@ -698,7 +711,7 @@
       return `<article class="p-card${out ? ' stock-out' : ''}" data-detail="${p.id}" style="animation-delay:${Math.min(idx * 45, 400)}ms">
         <div class="p-media" id="pimg-${p.id}">
           ${first && String(first).match(/^\/|^https?:/) ? `<img src="${esc(first)}" alt="" onerror="this.remove()">` : `<div style="display:grid;place-items:center;height:100%;font-size:44px;">${esc(first || '🛍️')}</div>`}
-          ${discount ? `<span class="p-flag">-${discount}%</span>` : (out ? `<span class="p-flag">نفد</span>` : (Number(p.stock) <= 5 && !out ? `<span class="p-flag ok">آخر القطع</span>` : ''))}
+          ${discount ? `<span class="p-flag">🔥 خصم ${discount}%</span>` : (out ? `<span class="p-flag">نفد</span>` : (Number(p.stock) <= 5 && !out ? `<span class="p-flag ok">آخر القطع</span>` : ''))}
           <button class="p-fav${isFav(p.id) ? ' on' : ''}" data-fav="${p.id}" aria-label="مفضلة">${isFav(p.id) ? '❤️' : '🤍'}</button>
           <button class="p-quick" data-add="${p.id}" ${out ? 'disabled' : ''}>＋ سريعة</button>
         </div>

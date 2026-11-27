@@ -259,11 +259,17 @@ function normalizeVariants(raw) {
   return out;
 }
 function variantTotal(vars, fallback) { return vars.length ? vars.reduce((s, v) => s + v.stock, 0) : Math.max(0, Math.floor(num(fallback))); }
+// الخصم المئوي يُحوّل إلى "السعر قبل الخصم" إذا لم يُدخل يدوياً
+function effectiveOldPrice(price, oldPrice, discount) {
+  const p = num(price), d = Math.min(99, Math.max(0, num(discount)));
+  if (num(oldPrice) > 0) return num(oldPrice);
+  return d > 0 && p > 0 ? Math.round(p / (1 - d / 100) * 100) / 100 : 0;
+}
 
 add('GET', '/api/store/products', ({ query }) => {
   const cat = Number(query.get('category') || 0);
   const q = str(query.get('q') || '');
-  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json, color_hex_json, variants_json, (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS rating_count';
+  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json, color_hex_json, discount_percent, variants_json, (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS rating_count';
   let rows;
   if (cat) {
     const ids = [cat, ...all('SELECT id FROM categories WHERE parent_id=?', cat).map(r => Number(r.id))];
@@ -520,20 +526,24 @@ add('POST', '/api/admin/products', ({ body }) => {
   if (!name) return { status: 400, body: { error: 'اسم المنتج مطلوب' } };
   const vars = normalizeVariants(body.variants_json);
   const stock = variantTotal(vars, body.stock);
-  const info = run(`INSERT INTO products (category_id,name_ar,name_en,description,price,old_price,image_url,icon,stock,active,colors_json,sizes_json,images_json,color_images_json,color_hex_json,variants_json,created_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    num(body.category_id) || null, name, str(body.name_en), str(body.description), num(body.price), num(body.old_price),
+  const info = run(`INSERT INTO products (category_id,name_ar,name_en,description,price,old_price,image_url,icon,stock,active,colors_json,sizes_json,images_json,color_images_json,color_hex_json,discount_percent,variants_json,created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    num(body.category_id) || null, name, str(body.name_en), str(body.description), num(body.price),
+    effectiveOldPrice(body.price, body.old_price, body.discount_percent),
     str(body.image_url), str(body.icon) || '🛍️', stock, body.active === false ? 0 : 1,
-    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), str(body.color_hex_json) || '{}', JSON.stringify(vars), now());
+    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), str(body.color_hex_json) || '{}',
+    Math.min(99, Math.max(0, num(body.discount_percent))), JSON.stringify(vars), now());
   return { ok: true, id: Number(info.lastInsertRowid), stock, variants: vars.length };
 }, { auth: true });
 add('PUT', '/api/admin/products/:id', ({ params, body }) => {
   const vars = normalizeVariants(body.variants_json);
   const stock = variantTotal(vars, body.stock);
-  run(`UPDATE products SET category_id=?,name_ar=?,name_en=?,description=?,price=?,old_price=?,image_url=?,icon=?,stock=?,active=?,colors_json=?,sizes_json=?,images_json=?,color_images_json=?,color_hex_json=?,variants_json=? WHERE id=?`,
-    num(body.category_id) || null, str(body.name_ar), str(body.name_en), str(body.description), num(body.price), num(body.old_price),
+  run(`UPDATE products SET category_id=?,name_ar=?,name_en=?,description=?,price=?,old_price=?,image_url=?,icon=?,stock=?,active=?,colors_json=?,sizes_json=?,images_json=?,color_images_json=?,color_hex_json=?,discount_percent=?,variants_json=? WHERE id=?`,
+    num(body.category_id) || null, str(body.name_ar), str(body.name_en), str(body.description), num(body.price),
+    effectiveOldPrice(body.price, body.old_price, body.discount_percent),
     str(body.image_url), str(body.icon) || '🛍️', stock, body.active === false ? 0 : 1,
-    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), str(body.color_hex_json) || '{}', JSON.stringify(vars), num(params.id));
+    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), str(body.color_hex_json) || '{}',
+    Math.min(99, Math.max(0, num(body.discount_percent))), JSON.stringify(vars), num(params.id));
   return { ok: true, stock, variants: vars.length };
 }, { auth: true });
 add('DELETE', '/api/admin/products/:id', ({ params }) => {

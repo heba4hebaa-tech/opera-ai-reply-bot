@@ -124,6 +124,7 @@ ensureColumn('products', 'images_json', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('products', 'color_images_json', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('products', 'variants_json', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('products', 'color_hex_json', "TEXT NOT NULL DEFAULT '{}'");
+ensureColumn('products', 'discount_percent', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('categories', 'has_options', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('categories', 'colors_json', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('categories', 'sizes_json', "TEXT NOT NULL DEFAULT ''");
