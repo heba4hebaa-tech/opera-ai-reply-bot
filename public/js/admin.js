@@ -214,14 +214,22 @@
 
   function productForm(p) {
     p = p || {};
-    const catLabel = c => { const par = state.categories.find(x => x.id === Number(c.parent_id)); return par ? `${par.name_ar} ← ${c.name_ar}` : c.name_ar; };
-    const options = state.categories.map(c => `<option value="${c.id}" ${p.category_id === c.id ? 'selected' : ''}>${esc(catLabel(c))}</option>`).join('');
+    let currentCat = state.categories.find(c => c.id === Number(p.category_id));
+    const parentId = currentCat ? (Number(currentCat.parent_id) || currentCat.id) : 0;
+    const parentCat = state.categories.find(c => c.id === parentId);
+    const parentLabel = parentCat ? parentCat.name_ar : 'عام';
     const m = modal(p.id ? 'تعديل المنتج' : 'منتج جديد', `<form id="prodForm">
       <div class="form-row two"><div><label>الاسم بالعربية *</label><input name="name_ar" value="${esc(p.name_ar || '')}" required></div>
       <div><label>الاسم بالإنجليزية</label><input name="name_en" value="${esc(p.name_en || '')}"></div></div>
       <div class="form-row"><label>الوصف</label><textarea name="description" style="min-height:70px;">${esc(p.description || '')}</textarea></div>
-      <div class="form-row two"><div><label>الصنف</label><select name="category_id"><option value="0">عام</option>${options}</select></div>
-      <div><label>الرمز (إيموجي أو صورة)</label><input name="icon" id="prodIcon" value="${esc(p.icon || '🛍️')}"></div></div>
+      <div class="form-row two"><div><label>التصنيف الأب</label>
+        <select id="prodParent"><option value="0">— عام —</option>
+          ${state.categories.filter(c => !Number(c.parent_id)).map(c => `<option value="${c.id}" ${parentId === c.id ? 'selected' : ''}>${esc(c.icon && !c.icon.startsWith('/') ? c.icon : '📦')} ${esc(c.name_ar)}</option>`).join('')}
+        </select></div>
+      <div><label>التصنيف الفرعي</label><select id="prodChild" ${parentId ? '' : 'disabled'}><option value="0">— بدون فرعي —</option></select></div></div>
+      <input type="hidden" name="category_id" id="prodCategoryId" value="${p.category_id || 0}">
+      <div class="small muted" id="prodCategoryLabel" style="margin:-6px 0 10px;">المجموعة: ${esc(parentLabel)}</div>
+      <div class="form-row two"><div><label>الرمز (إيموجي أو صورة)</label><input name="icon" id="prodIcon" value="${esc(p.icon || '🛍️')}"></div></div>
       <div class="form-row two"><div><label>ارفع صورة المنتج من جهازك</label><input type="file" id="prodImageFile" accept="image/*"><div id="prodImagePreview" class="small" style="margin-top:6px;">${p.image_url ? `<img src="${esc(p.image_url)}" style="max-width:100%;max-height:110px;border-radius:10px;">` : ''}</div></div>
       <div><label>أو ارفع أيقونة</label><input type="file" id="prodIconFile" accept="image/*"><div id="prodIconPreview" class="small" style="margin-top:6px;"></div></div></div>
       <div class="form-row"><label>رابط الصورة (يُملأ تلقائياً عند الرفع)</label><input name="image_url" id="prodImageUrl" value="${esc(p.image_url || '')}" placeholder="/uploads/..."></div>
@@ -268,6 +276,27 @@
     </form>`, { wide: true });
     bindUpload('prodImageFile', 'prodImageUrl', 'prodImagePreview');
     bindUpload('prodIconFile', 'prodIcon', 'prodIconPreview');
+
+    const parentSel = m.el.querySelector('#prodParent'), childSel = m.el.querySelector('#prodChild');
+    const categoryIdEl = m.el.querySelector('#prodCategoryId');
+    function syncCategory() {
+      const pid = Number(parentSel.value) || 0, cid = Number(childSel.value) || 0;
+      categoryIdEl.value = String(cid || pid);
+      const par = state.categories.find(c => c.id === pid), ch = state.categories.find(c => c.id === cid);
+      const lab = $('prodCategoryLabel');
+      if (lab) lab.textContent = `المجموعة: ${par ? par.name_ar : 'عام'}${ch ? ' ← ' + ch.name_ar : ''}`;
+    }
+    function fillChildren() {
+      const pid = Number(parentSel.value) || 0;
+      const kids = state.categories.filter(c => Number(c.parent_id) === pid);
+      childSel.disabled = !kids.length;
+      const chosen = Number(currentCat?.parent_id) === pid ? Number(currentCat.id) : 0;
+      childSel.innerHTML = '<option value="0">— بدون فرعي —</option>' + kids.map(c => `<option value="${c.id}" ${chosen === c.id ? 'selected' : ''}>${esc(c.name_ar)}</option>`).join('');
+      syncCategory();
+    }
+    parentSel.onchange = () => { currentCat = null; fillChildren(); };
+    childSel.onchange = syncCategory;
+    fillChildren();
 
     let gallery = parseJsonSafe($('prodImagesJson').value, []);
     let colorMap = parseJsonSafe($('prodColorImagesJson').value, {});
@@ -806,6 +835,33 @@
     else toast(r.error || 'تعذر التغيير', true);
   };
 
+  function categoryTreeModal() {
+    const m = modal('تصنيف أب + فروع 🗂️', `<form id="treeForm">
+      <div class="form-row"><label>اسم التصنيف الأب *</label><input id="treeParent" required placeholder="مثال: حقائب"></div>
+      <div class="form-row"><label>الأيقونة (إيموجي)</label><input id="treeIcon" value="🗂️" placeholder="👜"></div>
+      <div class="form-row"><label>التصنيفات الفرعية (سطر لكل فرع)</label>
+        <textarea id="treeChildren" rows="4" placeholder="حقائب يد&#10;حقائب سفر&#10;حقائب ظهر"></textarea>
+        <div class="small muted" style="margin-top:5px;">كل سطر يصبح صنفاً فرعياً داخل الأب.</div>
+      </div>
+      <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary">إنشاء التصنيفات</button></div>
+    </form>`);
+    m.el.querySelector('#treeForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const parentName = $('treeParent').value.trim();
+      if (!parentName) return;
+      const kids = $('treeChildren').value.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+      const par = await api('/api/admin/categories', { method: 'POST', body: { name_ar: parentName, icon: $('treeIcon').value.trim() || '🗂️', active: true } });
+      if (!par.ok) { toast('تعذر إنشاء الأب', true); return; }
+      let okCount = 0;
+      for (const kid of kids) {
+        const r = await api('/api/admin/categories', { method: 'POST', body: { name_ar: kid, icon: '📦', parent_id: par.id, active: true } });
+        if (r.ok) okCount++;
+      }
+      m.close(); toast(`تم إنشاء «${parentName}» مع ${okCount} فرع ✓`);
+      loadCategories(); loadProducts();
+    });
+  }
+  $('addCategoryTree').onclick = categoryTreeModal;
   $('addCategory').onclick = () => categoryForm();
   $('addProduct').onclick = () => productForm();
   $('addFaq').onclick = () => faqForm();
