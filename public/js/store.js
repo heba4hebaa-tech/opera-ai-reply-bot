@@ -362,12 +362,170 @@
     else { document.documentElement.removeAttribute('data-theme'); if ($('hdrTheme')) $('hdrTheme').textContent = '☀️'; }
     renderInfo(); renderChips(); renderProducts(); renderCustomer(); renderAds(); wireSearch(); wireScroll(); wireTabs(); wireChat(); wireHeader();
     updateBadges(); renderChat(); hideSplash(); autoAds();
+    renderCatCircles(); renderRails(); renderReviewsRail(); wireRails(); wireReveal(); wireToTop(); animateStats();
     loadNotifications();
     setInterval(() => loadNotifications(true), 60000); // فحص التنبيهات كل دقيقة
     if (location.hash.startsWith('#p')) {
       const p = state.products.find(x => x.id === Number(location.hash.slice(2)));
       if (p) setTimeout(() => openProductModal(p), 700);
     }
+  }
+
+  // ================= دوائر الأصناف السريعة =================
+  function renderCatCircles() {
+    const box = $('catCircles'); if (!box) return;
+    const parents = state.categories.filter(c => !Number(c.parent_id));
+    const all = [{ id: 0, name_ar: 'الكل', icon: '🗂️' },
+      { id: -1, name_ar: 'عروض', icon: '🔥' },
+      ...parents];
+    box.innerHTML = all.map(c => {
+      const ic = c.icon && /^\/|^https?:/.test(c.icon) ? `<img src="${esc(c.icon)}" alt="" onerror="this.replaceWith(document.createTextNode('📦'))">` : esc(c.icon || '📦');
+      const active = c.id === -1 ? state.offersOnly : (!state.offersOnly && state.activeCat === c.id);
+      return `<button class="cc${active ? ' active' : ''}" data-cc="${c.id}"><span class="cc-ic">${ic}</span><small>${esc(c.name_ar)}</small></button>`;
+    }).join('');
+    box.querySelectorAll('[data-cc]').forEach(b => b.onclick = () => {
+      const id = Number(b.dataset.cc);
+      if (id === -1) {
+        state.offersOnly = true; state.activeCat = 0; state.activeParent = 0;
+        $('subChips').style.display = 'none';
+      } else {
+        state.offersOnly = false;
+        if (id === 0) { state.activeCat = 0; state.activeParent = 0; $('subChips').style.display = 'none'; }
+        else { state.activeParent = id; state.activeCat = id; renderSubChips(); }
+      }
+      renderCatCircles(); renderChips(); renderProducts();
+      $('products')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  // ================= شرائط المنتجات الأفقية (عروض + مميزة) =================
+  function railCard(p, cur) {
+    const colors = splitOpts(p.colors_json);
+    const gallery = parseJson(p.images_json, []);
+    const images = gallery.length ? gallery : (p.image_url ? [p.image_url] : []);
+    const colorMap = parseJson(p.color_images_json, {});
+    const first = colorMap[colors[0]] || images[0] || p.icon;
+    const out = Number(p.stock) <= 0;
+    const discount = Number(p.discount_percent) || (p.old_price && Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0);
+    return `<article class="p-card${out ? ' stock-out' : ''}" data-detail="${p.id}">
+      <div class="p-media">
+        ${first && String(first).match(/^\/|^https?:/) ? `<img src="${esc(first)}" alt="" onerror="this.remove()">` : `<div style="display:grid;place-items:center;height:100%;font-size:40px;">${esc(first || '🛍️')}</div>`}
+        ${discount ? `<span class="p-flag">🔥 خصم ${discount}%</span>` : (out ? `<span class="p-flag">نفد</span>` : '')}
+        <button class="p-fav${isFav(p.id) ? ' on' : ''}" data-fav="${p.id}" aria-label="مفضلة">${isFav(p.id) ? '❤️' : '🤍'}</button>
+        <button class="p-quick" data-add="${p.id}" ${out ? 'disabled' : ''}>＋ سريعة</button>
+      </div>
+      <div class="p-body">
+        <h3 class="p-name">${esc(p.name_ar)}</h3>
+        <div class="p-price-row"><span class="p-price">${money(p.price, cur)}</span>${p.old_price ? `<span class="p-old">${money(p.old_price, cur)}</span>` : ''}</div>
+        <div class="p-meta"><span class="p-stars">${p.avg_rating ? `⭐ ${Number(p.avg_rating).toFixed(1)}` : '⭐ جديد'}</span><span class="p-stock ${out ? 'out' : ''}">${out ? 'نفد' : `متوفر ${p.stock}`}</span></div>
+      </div>
+    </article>`;
+  }
+  function wireRailCards(root) {
+    root.querySelectorAll('[data-fav]').forEach(b => b.onclick = e => {
+      e.stopPropagation();
+      const on = toggleFav(b.dataset.fav);
+      b.textContent = on ? '❤️' : '🤍';
+      b.classList.toggle('on', on);
+      toast(on ? 'أُضيف للمفضلة ❤️' : 'أُزيل من المفضلة');
+    });
+    root.querySelectorAll('[data-add]').forEach(b => b.onclick = e => {
+      e.stopPropagation();
+      addToCart(Number(b.dataset.add), '', {});
+    });
+    root.querySelectorAll('[data-detail]').forEach(b => b.onclick = e => {
+      e.stopPropagation();
+      const p = state.products.find(x => x.id === Number(b.dataset.detail));
+      if (p) openProductModal(p);
+    });
+  }
+  function renderRails() {
+    const cur = state.info.currency || '';
+    const deals = state.products.filter(p => {
+      const d = Number(p.discount_percent) || (Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0);
+      return d > 0 && Number(p.stock) > 0;
+    }).slice(0, 10);
+    const featured = [...state.products].filter(p => Number(p.stock) > 0)
+      .sort((a, b) => (Number(b.avg_rating) || 0) - (Number(a.avg_rating) || 0) || Number(b.rating_count || 0) - Number(a.rating_count || 0))
+      .slice(0, 10);
+    const dSec = $('dealsSec'), dRail = $('dealsRail');
+    if (dSec && dRail) {
+      dSec.hidden = !deals.length;
+      dRail.innerHTML = deals.map(p => railCard(p, cur)).join('');
+      wireRailCards(dRail);
+    }
+    const fSec = $('featuredSec'), fRail = $('featuredRail');
+    if (fSec && fRail) {
+      fSec.hidden = !featured.length;
+      fRail.innerHTML = featured.map(p => railCard(p, cur)).join('');
+      wireRailCards(fRail);
+    }
+  }
+  function wireRails() {
+    document.querySelectorAll('.rail-nav').forEach(b => b.onclick = () => {
+      const rail = $(b.dataset.rail); if (!rail) return;
+      const card = rail.querySelector('.p-card');
+      const step = (card ? card.offsetWidth + 13 : 220) * Number(b.dataset.dir || 1) * 2;
+      rail.scrollBy({ left: step, behavior: 'smooth' });
+    });
+  }
+
+  // ================= آراء الزبائن (شريط) =================
+  async function renderReviewsRail() {
+    const sec = $('reviewsSec'), rail = $('reviewsRail');
+    if (!sec || !rail) return;
+    try {
+      const r = await fetch('/api/reviews?limit=12').then(x => x.json());
+      const items = (r.items || []).slice(0, 10);
+      if (!items.length) { sec.hidden = true; return; }
+      sec.hidden = false;
+      rail.innerHTML = items.map(v => {
+        const name = v.customer_name || 'زبون';
+        const initial = esc(name.trim().charAt(0) || 'ز');
+        return `<div class="rev-card">
+          <div class="rc-stars">${stars(v.rating)}</div>
+          <p>${esc((v.text || '').slice(0, 220))}</p>
+          <div class="rc-who"><span class="rc-av">${initial}</span><span><b>${esc(name)}</b><span>${fmtDate(v.created_at)}</span></span></div>
+        </div>`;
+      }).join('');
+    } catch { sec.hidden = true; }
+  }
+
+  // ================= حركات الظهور عند التمرير =================
+  function wireReveal() {
+    const els = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window)) { els.forEach(e => e.classList.add('in')); return; }
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
+    }, { threshold: 0.12 });
+    els.forEach(e => io.observe(e));
+  }
+
+  // ================= زر العودة للأعلى =================
+  function wireToTop() {
+    const btn = $('toTop'); if (!btn) return;
+    const on = () => btn.classList.toggle('show', window.scrollY > 420);
+    window.addEventListener('scroll', on, { passive: true }); on();
+    btn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ================= عدّادات الإحصاءات في الهيدر =================
+  function animateStats() {
+    const set = (id, val, suffix) => {
+      const el = $(id); if (!el) return;
+      const target = Number(val) || 0;
+      if (!target) { el.textContent = suffix || '0'; return; }
+      let cur = 0; const dur = 900; const t0 = performance.now();
+      const tick = t => {
+        const k = Math.min(1, (t - t0) / dur);
+        cur = Math.round(target * (1 - Math.pow(1 - k, 3)));
+        el.textContent = cur + (suffix || '');
+        if (k < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+    set('statProducts', state.products.length, '+');
+    set('statCats', state.categories.length, '+');
   }
 
   function wireScroll() {
@@ -484,6 +642,7 @@
       $('products')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     renderSubChips();
+    if (typeof renderCatCircles === 'function' && $('catCircles')?.children.length) renderCatCircles();
   }
   function renderSubChips() {
     const box = $('subChips'); if (!box) return;
@@ -1016,7 +1175,10 @@
   $('checkoutBtn') && ($('checkoutBtn').onclick = checkout);
   $('assistantBtn') && ($('assistantBtn').onclick = assistantInfo);
   $('heroChat') && ($('heroChat').onclick = assistantInfo);
+  $('ctaChat') && ($('ctaChat').onclick = assistantInfo);
+  $('ctaInstall') && ($('ctaInstall').onclick = installGuide);
   $('loginBtn') && ($('loginBtn').onclick = () => state.customer ? profileModal() : loginModal());
+  $('ftYear') && ($('ftYear').textContent = String(new Date().getFullYear()));
 
   // ================= تثبيت التطبيق (PWA) =================
   let deferredPrompt = null;

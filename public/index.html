@@ -49,6 +49,7 @@
 
 <!-- الواجهة الرئيسية -->
 <section class="hero" id="home">
+  <div class="hero-shapes" aria-hidden="true"><i class="hs1"></i><i class="hs2"></i><i class="hs3"></i></div>
   <div class="hero-inner">
     <span class="tag">✨ تسوّق ذكي · رد فوري على مدار الساعة</span>
     <h1>كل ما تحتاجه، <span>بضغطة زر</span></h1>
@@ -60,6 +61,11 @@
     <div class="trust">
       <span>⚡ رد فوري</span><span>🤖 مساعد ذكي</span><span>🚚 توصيل سريع</span><span>🔒 طلب آمن</span>
     </div>
+    <div class="hero-stats" aria-label="إحصاءات المتجر">
+      <div class="h-stat"><b id="statProducts">0</b><span>منتج متوفر</span></div>
+      <div class="h-stat"><b id="statCats">0</b><span>صنف متنوع</span></div>
+      <div class="h-stat"><b id="statRate">24/7</b><span>دعم متواصل</span></div>
+    </div>
   </div>
 </section>
 
@@ -67,12 +73,43 @@
   <!-- لافتة إعلانية علوية -->
   <div class="ads-banner" id="adsHero" hidden></div>
 
-  <div class="card" style="padding:14px 18px;background:linear-gradient(135deg,#eaf7f4,#f3f8ff);border:1px solid #dceee9;">
-    <div class="row wrap" style="justify-content:space-between;">
-      <div class="row"><span style="font-size:22px;">💬</span><div><b>أسئلتك؟ مساعدنا يرد عليك فوراً</b><div class="small muted">دردشة داخل التطبيق · واتساب · مسنجر</div></div></div>
-      <button class="btn btn-primary btn-sm" id="assistantBtn">جرّب المساعد</button>
-    </div>
+  <!-- دوائر الأسرع -->
+  <section class="cat-circles no-bar" id="catCircles" aria-label="الأصناف السريعة"></section>
+
+  <!-- بانر المساعد -->
+  <div class="assist-banner reveal">
+    <div class="ab-ic">💬</div>
+    <div class="ab-txt"><b>أسئلتك؟ مساعدنا يرد عليك فوراً</b><span>دردشة داخل التطبيق · واتساب · مسنجر</span></div>
+    <button class="btn btn-primary btn-sm" id="assistantBtn">جرّب المساعد</button>
   </div>
+
+  <!-- شريط العروض الأفقي -->
+  <section class="rail-sec reveal" id="dealsSec" hidden>
+    <div class="section-title" style="margin-top:26px;">
+      <div><h2>🔥 عروض اليوم</h2><p>منتجات بخصومات لفترة محدودة</p></div>
+      <button class="rail-nav" data-rail="dealsRail" data-dir="1" aria-label="التالي">‹</button>
+      <button class="rail-nav" data-rail="dealsRail" data-dir="-1" aria-label="السابق">›</button>
+    </div>
+    <div class="rail no-bar" id="dealsRail"></div>
+  </section>
+
+  <!-- شريط المنتجات المميزة -->
+  <section class="rail-sec reveal" id="featuredSec" hidden>
+    <div class="section-title" style="margin-top:26px;">
+      <div><h2>⭐ الأكثر طلباً</h2><p>اختيارات زبائننا الأكثر شيوعاً</p></div>
+      <button class="rail-nav" data-rail="featuredRail" data-dir="1" aria-label="التالي">‹</button>
+      <button class="rail-nav" data-rail="featuredRail" data-dir="-1" aria-label="السابق">›</button>
+    </div>
+    <div class="rail no-bar" id="featuredRail"></div>
+  </section>
+
+  <!-- مزايا المتجر -->
+  <section class="feat-grid reveal" aria-label="مزايا المتجر">
+    <div class="feat-card"><span class="f-ic">🚚</span><b>توصيل سريع</b><p>نوصل طلبك لباب منزلك بسرعة وأمان</p></div>
+    <div class="feat-card"><span class="f-ic">🔒</span><b>دفع آمن</b><p>طرق دفع موثوقة وحماية كاملة لبياناتك</p></div>
+    <div class="feat-card"><span class="f-ic">💬</span><b>دعم فوري</b><p>مساعد ذكي يرد عليك 24 ساعة على مدار الأسبوع</p></div>
+    <div class="feat-card"><span class="f-ic">↩️</span><b>استبدال سهل</b><p>سياسة استبدال واضحة وسريعة دون تعقيد</p></div>
+  </section>
 
   <div class="section-title" id="products">
     <div><h2>منتجاتنا</h2><p>اختر ما يناسبك وأضفه للسلة</p></div>
@@ -84,18 +121,43 @@
   <!-- لافتات إعلانية -->
   <div class="ads-banner" id="adsBanner" hidden></div>
   <div class="p-grid" id="productGrid">
-    <div class="empty-app" style="grid-column:1/-1;"><span class="big">🛍️</span><h4>جارٍ تحميل المنتجات…</h4></div>
+    <div class="sk-card"><div class="sk-img"></div><div class="sk-line w80"></div><div class="sk-line w50"></div></div>
+    <div class="sk-card"><div class="sk-img"></div><div class="sk-line w80"></div><div class="sk-line w50"></div></div>
+    <div class="sk-card"><div class="sk-img"></div><div class="sk-line w80"></div><div class="sk-line w50"></div></div>
+    <div class="sk-card"><div class="sk-img"></div><div class="sk-line w80"></div><div class="sk-line w50"></div></div>
   </div>
+
+  <!-- آراء الزبائن -->
+  <section class="reveal" id="reviewsSec" hidden>
+    <div class="section-title"><div><h2>💬 آراء زبائننا</h2><p>تجارب حقيقية من عملائنا</p></div></div>
+    <div class="rev-rail no-bar" id="reviewsRail"></div>
+  </section>
+
+  <!-- دعوة للتفاعل -->
+  <section class="cta-card reveal">
+    <div class="cta-ic">📲</div>
+    <h3>ثبّت تطبيقنا على هاتفك</h3>
+    <p>تجربة أسرع، إشعارات فورية، ويفتح بضغطة واحدة — مثل تطبيقات الهاتف الحقيقية.</p>
+    <div class="row wrap" style="justify-content:center;">
+      <button class="btn btn-gold" id="ctaInstall">تثبيت التطبيق</button>
+      <button class="btn btn-outline" id="ctaChat" style="color:#fff;border-color:rgba(255,255,255,.5)">💬 تكلّم معنا</button>
+    </div>
+  </section>
 </main>
 
 <footer class="site-footer" id="contact">
+  <div class="ft-brand"><img src="/logo.svg" alt="" onerror="this.style.display='none'"><b id="ftName">LUNZERA</b></div>
   <div id="footerText">نرحب بطلباتكم على مدار الساعة 🤍</div>
   <div class="row" style="justify-content:center;margin-top:10px;gap:16px;">
     <a id="waLink" href="#" class="small">📱 واتساب</a>
     <a id="msLink" href="#" class="small">💬 مسنجر</a>
     <a href="/admin" class="small">🔐 الأدمن</a>
   </div>
+  <div class="ft-copy">© <span id="ftYear"></span> LUNZERA — كل الحقوق محفوظة</div>
 </footer>
+
+<!-- زر الرأس -->
+<button id="toTop" aria-label="العودة للأعلى">↑</button>
 
 <!-- شريط التنقل السفلي -->
 <nav class="tabbar" aria-label="تطبيق">
