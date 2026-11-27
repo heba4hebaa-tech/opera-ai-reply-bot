@@ -479,7 +479,7 @@
   }
   function renderSubChips() {
     const box = $('subChips'); if (!box) return;
-    const kids = state.categories.filter(x => Number(x.parent_id) === state.activeParent);
+    const kids = state.activeParent ? state.categories.filter(x => Number(x.parent_id) === state.activeParent) : [];
     if (!kids.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
     box.style.display = 'flex';
     box.innerHTML = `<span class="small muted" style="align-self:center;margin-inline-end:4px;">🔻 فلترة:</span>` +
