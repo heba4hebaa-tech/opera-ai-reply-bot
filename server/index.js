@@ -263,7 +263,7 @@ function variantTotal(vars, fallback) { return vars.length ? vars.reduce((s, v) 
 add('GET', '/api/store/products', ({ query }) => {
   const cat = Number(query.get('category') || 0);
   const q = str(query.get('q') || '');
-  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json, variants_json, (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS rating_count';
+  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json, color_hex_json, variants_json, (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS rating_count';
   const rows = cat
     ? all(`SELECT ${fields} FROM products p WHERE active=1 AND category_id=? ORDER BY p.id DESC`, cat)
     : all(`SELECT ${fields} FROM products p WHERE active=1 ORDER BY p.id DESC`);
@@ -515,20 +515,20 @@ add('POST', '/api/admin/products', ({ body }) => {
   if (!name) return { status: 400, body: { error: 'اسم المنتج مطلوب' } };
   const vars = normalizeVariants(body.variants_json);
   const stock = variantTotal(vars, body.stock);
-  const info = run(`INSERT INTO products (category_id,name_ar,name_en,description,price,old_price,image_url,icon,stock,active,colors_json,sizes_json,images_json,color_images_json,variants_json,created_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  const info = run(`INSERT INTO products (category_id,name_ar,name_en,description,price,old_price,image_url,icon,stock,active,colors_json,sizes_json,images_json,color_images_json,color_hex_json,variants_json,created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     num(body.category_id) || null, name, str(body.name_en), str(body.description), num(body.price), num(body.old_price),
     str(body.image_url), str(body.icon) || '🛍️', stock, body.active === false ? 0 : 1,
-    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), JSON.stringify(vars), now());
+    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), str(body.color_hex_json) || '{}', JSON.stringify(vars), now());
   return { ok: true, id: Number(info.lastInsertRowid), stock, variants: vars.length };
 }, { auth: true });
 add('PUT', '/api/admin/products/:id', ({ params, body }) => {
   const vars = normalizeVariants(body.variants_json);
   const stock = variantTotal(vars, body.stock);
-  run(`UPDATE products SET category_id=?,name_ar=?,name_en=?,description=?,price=?,old_price=?,image_url=?,icon=?,stock=?,active=?,colors_json=?,sizes_json=?,images_json=?,color_images_json=?,variants_json=? WHERE id=?`,
+  run(`UPDATE products SET category_id=?,name_ar=?,name_en=?,description=?,price=?,old_price=?,image_url=?,icon=?,stock=?,active=?,colors_json=?,sizes_json=?,images_json=?,color_images_json=?,color_hex_json=?,variants_json=? WHERE id=?`,
     num(body.category_id) || null, str(body.name_ar), str(body.name_en), str(body.description), num(body.price), num(body.old_price),
     str(body.image_url), str(body.icon) || '🛍️', stock, body.active === false ? 0 : 1,
-    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), JSON.stringify(vars), num(params.id));
+    str(body.colors_json), str(body.sizes_json), str(body.images_json), str(body.color_images_json), str(body.color_hex_json) || '{}', JSON.stringify(vars), num(params.id));
   return { ok: true, stock, variants: vars.length };
 }, { auth: true });
 add('DELETE', '/api/admin/products/:id', ({ params }) => {

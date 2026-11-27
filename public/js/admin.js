@@ -222,7 +222,17 @@
       <div class="form-row two"><div><label>السعر</label><input name="price" type="number" step="0.01" value="${p.price || 0}"></div>
       <div><label>السعر قبل الخصم</label><input name="old_price" type="number" step="0.01" value="${p.old_price || 0}"></div></div>
       <div class="form-row two"><div><label>المخزون</label><input name="stock" type="number" value="${p.stock || 0}"></div>
-      <div><label>ألوان هذا المنتج (فارغ = من الصنف)</label><input name="colors_json" value="${esc(parseOpts(p.colors_json).join('، '))}" placeholder="أحمر، أزرق"></div></div>
+      <div><label>ألوان هذا المنتج (فارغ = من الصنف)</label>
+        <input type="hidden" name="colors_json" value="${esc(p.colors_json || '[]')}">
+        <input type="hidden" name="color_hex_json" value="${esc(p.color_hex_json || '{}')}">
+        <div class="row wrap" style="gap:6px;margin-top:6px;" id="presetColors"></div>
+        <div class="row wrap" style="gap:6px;margin-top:8px;">
+          <input type="color" id="customColorHex" value="#0f766e" style="width:46px;height:38px;padding:2px;border:1px solid var(--line);border-radius:10px;">
+          <input id="customColorName" placeholder="اسم لون جديد" style="flex:1;min-width:130px;">
+          <button type="button" class="btn btn-ghost btn-sm" id="addCustomColor">+ إضافة</button>
+        </div>
+        <div class="row wrap" style="gap:6px;margin-top:8px;" id="chosenColors"></div>
+      </div></div>
       <div class="form-row two"><div><label>مقاسات هذا المنتج (فارغ = من الصنف)</label><input name="sizes_json" value="${esc(parseOpts(p.sizes_json).join('، '))}" placeholder="S، M، L"></div></div>
       <div class="form-row">
         <label>🧮 الكمية لكل لون/مقاس (اختياري)</label>
@@ -258,11 +268,61 @@
     const colorsInput = m.el.querySelector('[name=colors_json]');
     const sizesInput = m.el.querySelector('[name=sizes_json]');
     const variantsInput = $('prodVariantsJson');
+    const hexInput = m.el.querySelector('[name=color_hex_json]');
+
+    // ---- منتقي الألوان الدوّاري ----
+    const PRESET_COLORS = [
+      ['أحمر', '#dc2626'], ['أزرق', '#2563eb'], ['أسود', '#111827'], ['أبيض', '#ffffff'],
+      ['أخضر', '#16a34a'], ['أصفر', '#facc15'], ['وردي', '#ec4899'], ['بنفسجي', '#7c3aed'],
+      ['برتقالي', '#f97316'], ['بني', '#92400e'], ['رمادي', '#6b7280'], ['ذهبي', '#d4a72c'],
+      ['تركوازي', '#14b8a6'], ['بيج', '#e7d6b5'], ['كحلي', '#0f2f5c'], ['نيلي', '#4f46e5'],
+    ];
+    const getColors = () => parseJsonSafe(colorsInput.value, []);
+    const getHex = () => parseJsonSafe(hexInput.value, {});
+    function commitColors(colors, hex) {
+      colorsInput.value = JSON.stringify(colors);
+      hexInput.value = JSON.stringify(hex);
+      renderColorPicker(); renderColorRows(); generateVariants();
+    }
+    function renderColorPicker() {
+      const colors = getColors(), hex = getHex();
+      const preset = $('presetColors'), chosen = $('chosenColors');
+      if (preset) preset.innerHTML = PRESET_COLORS.map(([name, h]) => {
+        const on = colors.includes(name);
+        return `<button type="button" data-preset="${esc(name)}" data-hex="${h}" class="btn btn-ghost btn-sm" style="border-radius:99px;padding:5px 11px;border:2px solid ${on ? h : 'transparent'};">
+          <span style="display:inline-block;width:15px;height:15px;border-radius:50%;background:${h};border:1px solid rgba(0,0,0,.2);vertical-align:middle;margin-inline-end:5px;"></span>${esc(name)}</button>`;
+      }).join('');
+      if (chosen) chosen.innerHTML = colors.length ? colors.map(name => {
+        const h = hex[name] || '#cccccc';
+        return `<span class="pill" style="display:inline-flex;align-items:center;gap:6px;border-radius:99px;">
+          <span style="width:17px;height:17px;border-radius:50%;background:${esc(h)};border:1px solid rgba(0,0,0,.2);"></span>${esc(name)}
+          <button type="button" data-rmcolor="${esc(name)}" style="background:transparent;border:0;cursor:pointer;font-size:12px;">✕</button></span>`;
+      }).join('') : '<span class="small muted">لم تختر ألواناً — اختر من القائمة أو أضف لوناً جديداً</span>';
+      preset?.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => {
+        const name = b.dataset.preset, colors2 = getColors(), hex2 = getHex();
+        const i = colors2.indexOf(name);
+        if (i >= 0) colors2.splice(i, 1); else { colors2.push(name); hex2[name] = b.dataset.hex; }
+        commitColors(colors2, hex2);
+      });
+      chosen?.querySelectorAll('[data-rmcolor]').forEach(b => b.onclick = () => {
+        const colors2 = getColors().filter(x => x !== b.dataset.rmcolor);
+        commitColors(colors2, getHex());
+      });
+    }
+    $('addCustomColor')?.addEventListener('click', () => {
+      const name = $('customColorName').value.trim();
+      if (!name) { toast('اكتب اسم اللون', true); return; }
+      const colors2 = getColors(), hex2 = getHex();
+      if (!colors2.includes(name)) colors2.push(name);
+      hex2[name] = $('customColorHex').value || '#0f766e';
+      $('customColorName').value = '';
+      commitColors(colors2, hex2);
+    });
 
     const readVariants = () => parseJsonSafe(variantsInput.value, []);
     const saveVariants = (v) => { variantsInput.value = JSON.stringify(v); renderVariants(); };
     function combosFromInputs() {
-      const colors = splitOpts(colorsInput.value), sizes = splitOpts(sizesInput.value);
+      const colors = getColors(), sizes = splitOpts(sizesInput.value);
       const out = [];
       if (colors.length && sizes.length) colors.forEach(c => sizes.forEach(s => out.push({ color: c, size: s, stock: 0 })));
       else if (colors.length) colors.forEach(c => out.push({ color: c, size: '', stock: 0 }));
@@ -315,7 +375,7 @@
       });
     }
     function renderColorRows() {
-      const colors = splitOpts(colorsInput.value);
+      const colors = getColors();
       $('colorImages').innerHTML = colors.length ? colors.map(c => `<div class="row wrap" style="padding:7px 0;border-bottom:1px solid #f0f3f7;">
         <span class="pill">${esc(c)}</span>
         <input type="file" accept="image/*" data-color="${esc(c)}" style="width:auto;max-width:150px;">
@@ -343,9 +403,8 @@
       colorMap[e.target.dataset.colorUrl] = e.target.value;
       $('prodColorImagesJson').value = JSON.stringify(colorMap);
     };
-    colorsInput.oninput = () => { renderColorRows(); generateVariants(); };
     sizesInput.oninput = generateVariants;
-    renderGallery(); renderColorRows(); renderVariants();
+    renderGallery(); renderColorPicker(); renderColorRows(); renderVariants();
 
     m.el.querySelector('#prodForm').addEventListener('submit', async e => {
       e.preventDefault();
@@ -354,7 +413,8 @@
         name_ar: f.get('name_ar'), name_en: f.get('name_en'), description: f.get('description'),
         category_id: Number(f.get('category_id')) || null, icon: f.get('icon'), price: Number(f.get('price')),
         old_price: Number(f.get('old_price')), stock: Number(f.get('stock')), image_url: f.get('image_url'),
-        colors_json: JSON.stringify(splitOpts(f.get('colors_json'))),
+        colors_json: f.get('colors_json') || '[]',
+        color_hex_json: f.get('color_hex_json') || '{}',
         sizes_json: JSON.stringify(splitOpts(f.get('sizes_json'))),
         images_json: f.get('images_json') || '[]',
         color_images_json: f.get('color_images_json') || '{}',

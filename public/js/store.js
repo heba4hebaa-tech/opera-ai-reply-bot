@@ -506,6 +506,7 @@
     const gallery = parseJson(p.images_json, []);
     const images = gallery.length ? gallery : (p.image_url ? [p.image_url] : []);
     const colorMap = parseJson(p.color_images_json, {});
+    const hexMap = parseJson(p.color_hex_json, {});
     const related = state.products.filter(x => x.id !== p.id && x.category_id === p.category_id && Number(x.stock) > 0).slice(0, 6);
     const out = Number(p.stock) <= 0;
     const discount = p.old_price && Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0;
@@ -520,7 +521,7 @@
         <div class="pd-price">${money(p.price, cur)}${p.old_price ? ` <s>${money(p.old_price, cur)}</s>` : ''}</div>
         <div id="pm_rating">${p.avg_rating ? `<div class="small" style="color:#e6a23c;">⭐ ${Number(p.avg_rating).toFixed(1)} · ${p.rating_count} تقييم</div>` : ''}</div>
         ${p.description ? `<p class="pd-desc">${esc(p.description)}</p>` : ''}
-        ${colors.length ? `<div class="pd-opt"><label>اللون</label><div class="pd-choices" id="pm_colors">${colors.map((c,i)=>`<button type="button" class="pd-choice${i===0?' active':''}" data-color="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>` : ''}
+        ${colors.length ? `<div class="pd-opt"><label>اللون</label><div class="pd-choices pd-colors" id="pm_colors">${colors.map((c,i)=>`<button type="button" class="pd-choice pd-color${i===0?' active':''}" data-color="${esc(c)}" title="${esc(c)}"><span class="color-dot" style="background:${esc(hexMap[c] || '#cbd5e1')}"></span><small>${esc(c)}</small></button>`).join('')}</div></div>` : ''}
         ${sizes.length ? `<div class="pd-opt"><label>المقاس</label><div class="pd-choices" id="pm_sizes">${sizes.map((s,i)=>`<button type="button" class="pd-choice${i===0?' active':''}" data-size="${esc(s)}">${esc(s)}</button>`).join('')}</div></div>` : ''}
         <div class="pd-opt"><label>الكمية</label><div class="pd-qty"><button type="button" id="pm_minus">−</button><input id="pm_qty" type="number" min="1" value="1"><button type="button" id="pm_plus">+</button></div></div>
         <div class="pd-actions"><button class="btn btn-ghost" id="pm_fav">${isFav(p.id)?'❤️':'🤍'} مفضّلة</button><button class="btn btn-ghost" id="pm_share">🔗 مشاركة</button></div>
@@ -548,6 +549,12 @@
       badge.textContent = n > 0 ? `متوفر ${n}` : 'نفد';
       badge.classList.toggle('out', n <= 0);
       const qi = root.querySelector('#pm_qty'); if (qi) qi.max = String(Math.max(1, n));
+      root.querySelectorAll('#pm_sizes .pd-choice').forEach(b => {
+        const s = b.dataset.size || '';
+        const available = variantStock(p, selColor, s) > 0;
+        b.classList.toggle('oos', !available);
+        b.disabled = !available;
+      });
       const add = root.querySelector('#pm_add'), order = root.querySelector('#pm_order');
       if (add) add.disabled = n <= 0; if (order) order.disabled = n <= 0;
     };
@@ -635,6 +642,7 @@
       const gallery = parseJson(p.images_json, []);
       const images = gallery.length ? gallery : (p.image_url ? [p.image_url] : []);
       const colorMap = parseJson(p.color_images_json, {});
+    const hexMap = parseJson(p.color_hex_json, {});
       const first = colorMap[colors[0]] || images[0] || p.icon;
       const out = Number(p.stock) <= 0;
       const discount = p.old_price && Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0;
