@@ -146,7 +146,7 @@
     state.categories = d.items || [];
     $('categoryRows').innerHTML = state.categories.length ? state.categories.map(c => `<tr>
       <td>${c.sort_order}</td><td><b>${esc(c.icon)} ${esc(c.name_ar)}</b>${Number(c.parent_id) ? `<div class="small muted">← فرعي من: ${esc(state.categories.find(x => x.id === Number(c.parent_id))?.name_ar || '—')}</div>` : ''}<div class="small muted">${esc(c.name_en || '')}</div></td>
-      <td class="small muted">${esc(c.description || '—')}</td>
+      <td class="small muted">${esc(c.description || '—')}${Number(c.default_price) ? `<div><b style="color:var(--teal-dark);">${money(c.default_price, '')}</b>${Number(c.default_discount) ? ` · خصم ${c.default_discount}%` : ''}</div>` : ''}</td>
       <td><span class="pill ${c.active ? 'ok' : 'bad'}">${c.active ? 'نشط' : 'مخفي'}</span></td>
       <td><button class="btn btn-ghost btn-sm" data-ec="${c.id}">تعديل</button> <button class="btn btn-danger btn-sm" data-dc="${c.id}">حذف</button></td>
     </tr>`).join('') : `<tr><td colspan="5" class="empty">لا توجد أصناف — أضف صنفاً جديداً</td></tr>`;
@@ -171,6 +171,8 @@
       <div class="form-row check"><input type="checkbox" name="has_options" ${c.has_options ? 'checked' : ''}><label>هذا الصنف له ألوان ومقاسات</label></div>
       <div class="form-row two"><div><label>الألوان (افصل بفاصلة)</label><input name="colors_json" value="${esc(Array.isArray(c.colors_json) ? c.colors_json.join('، ') : (typeof c.colors_json === 'string' ? c.colors_json.replace(/[\[\]"]/g, '') : ''))}" placeholder="أحمر، أزرق، أسود"></div>
       <div><label>المقاسات (افصل بفاصلة)</label><input name="sizes_json" value="${esc(Array.isArray(c.sizes_json) ? c.sizes_json.join('، ') : (typeof c.sizes_json === 'string' ? c.sizes_json.replace(/[\[\]"]/g, '') : ''))}" placeholder="S، M، L، XL"></div></div>
+      <div class="form-row two"><div><label>السعر الافتراضي (يورّثه المنتج)</label><input name="default_price" type="number" step="0.01" value="${c.default_price || 0}" placeholder="0 = لا شيء"></div>
+      <div><label>خصم % (يطبّق على السعر الافتراضي)</label><input name="default_discount" type="number" step="0.1" value="${c.default_discount || 0}" placeholder="مثال: 20"></div></div>
       <div class="form-row two"><div><label>الترتيب</label><input name="sort_order" type="number" value="${c.sort_order || 0}"></div></div>
       <div class="form-row check"><input type="checkbox" name="active" ${c.active === 0 ? '' : 'checked'}><label>ظاهر للزبائن</label></div>
       <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary">حفظ</button></div>
@@ -183,6 +185,8 @@
         name_ar: f.get('name_ar'), name_en: f.get('name_en'), description: f.get('description'),
         icon: f.get('icon'), sort_order: Number(f.get('sort_order')), active: f.get('active') === 'on',
         parent_id: Number(f.get('parent_id')) || 0,
+        default_price: Number(f.get('default_price')) || 0,
+        default_discount: Number(f.get('default_discount')) || 0,
         has_options: f.get('has_options') === 'on',
         colors_json: JSON.stringify(splitOpts(f.get('colors_json'))),
         sizes_json: JSON.stringify(splitOpts(f.get('sizes_json'))),
@@ -279,23 +283,31 @@
 
     const parentSel = m.el.querySelector('#prodParent'), childSel = m.el.querySelector('#prodChild');
     const categoryIdEl = m.el.querySelector('#prodCategoryId');
-    function syncCategory() {
+    function syncCategory(applyDefaults) {
       const pid = Number(parentSel.value) || 0, cid = Number(childSel.value) || 0;
       categoryIdEl.value = String(cid || pid);
       const par = state.categories.find(c => c.id === pid), ch = state.categories.find(c => c.id === cid);
+      const chosen = ch || par;
       const lab = $('prodCategoryLabel');
       if (lab) lab.textContent = `المجموعة: ${par ? par.name_ar : 'عام'}${ch ? ' ← ' + ch.name_ar : ''}`;
+      if (applyDefaults && chosen && Number(chosen.default_price) > 0) {
+        const price = Number(chosen.default_price);
+        const priceEl = m.el.querySelector('[name=price]'), oldEl = m.el.querySelector('[name=old_price]');
+        if (priceEl) priceEl.value = price;
+        if (oldEl) oldEl.value = Number(chosen.default_discount) > 0 ? Math.round(price / (1 - Number(chosen.default_discount) / 100) * 100) / 100 : 0;
+        toast(`تم تعبئة السعر والخصم من التصنيف «${chosen.name_ar}»`);
+      }
     }
-    function fillChildren() {
+    function fillChildren(applyDefaults) {
       const pid = Number(parentSel.value) || 0;
       const kids = state.categories.filter(c => Number(c.parent_id) === pid);
       childSel.disabled = !kids.length;
       const chosen = Number(currentCat?.parent_id) === pid ? Number(currentCat.id) : 0;
       childSel.innerHTML = '<option value="0">— بدون فرعي —</option>' + kids.map(c => `<option value="${c.id}" ${chosen === c.id ? 'selected' : ''}>${esc(c.name_ar)}</option>`).join('');
-      syncCategory();
+      syncCategory(applyDefaults);
     }
-    parentSel.onchange = () => { currentCat = null; fillChildren(); };
-    childSel.onchange = syncCategory;
+    parentSel.onchange = () => { currentCat = null; fillChildren(true); };
+    childSel.onchange = () => syncCategory(true);
     fillChildren();
 
     let gallery = parseJsonSafe($('prodImagesJson').value, []);
@@ -838,7 +850,9 @@
   function categoryTreeModal() {
     const m = modal('تصنيف أب + فروع 🗂️', `<form id="treeForm">
       <div class="form-row"><label>اسم التصنيف الأب *</label><input id="treeParent" required placeholder="مثال: حقائب"></div>
-      <div class="form-row"><label>الأيقونة (إيموجي)</label><input id="treeIcon" value="🗂️" placeholder="👜"></div>
+      <div class="form-row two"><div><label>الأيقونة (إيموجي)</label><input id="treeIcon" value="🗂️" placeholder="👜"></div>
+      <div><label>السعر الافتراضي</label><input id="treePrice" type="number" step="0.01" value="0" placeholder="0"></div></div>
+      <div class="form-row"><label>خصم التصنيف %</label><input id="treeDiscount" type="number" step="0.1" value="0" placeholder="مثال: 20"></div>
       <div class="form-row"><label>التصنيفات الفرعية (سطر لكل فرع)</label>
         <textarea id="treeChildren" rows="4" placeholder="حقائب يد&#10;حقائب سفر&#10;حقائب ظهر"></textarea>
         <div class="small muted" style="margin-top:5px;">كل سطر يصبح صنفاً فرعياً داخل الأب.</div>
@@ -850,7 +864,7 @@
       const parentName = $('treeParent').value.trim();
       if (!parentName) return;
       const kids = $('treeChildren').value.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
-      const par = await api('/api/admin/categories', { method: 'POST', body: { name_ar: parentName, icon: $('treeIcon').value.trim() || '🗂️', active: true } });
+      const par = await api('/api/admin/categories', { method: 'POST', body: { name_ar: parentName, icon: $('treeIcon').value.trim() || '🗂️', active: true, default_price: Number($('treePrice').value) || 0, default_discount: Number($('treeDiscount').value) || 0 } });
       if (!par.ok) { toast('تعذر إنشاء الأب', true); return; }
       let okCount = 0;
       for (const kid of kids) {

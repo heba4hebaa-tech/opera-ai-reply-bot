@@ -242,7 +242,7 @@ add('GET', '/api/store/info', () => {
 });
 
 add('GET', '/api/store/categories', () => ({
-  items: all('SELECT id, name_ar, name_en, description, icon, has_options, colors_json, sizes_json, parent_id FROM categories WHERE active = 1 ORDER BY sort_order, id'),
+  items: all('SELECT id, name_ar, name_en, description, icon, has_options, colors_json, sizes_json, parent_id, default_price, default_discount FROM categories WHERE active = 1 ORDER BY sort_order, id'),
 }));
 
 // تحويل المتغيرات (لون/مقاس/كمية) إلى صيغة موحّدة
@@ -263,7 +263,19 @@ function variantTotal(vars, fallback) { return vars.length ? vars.reduce((s, v) 
 add('GET', '/api/store/products', ({ query }) => {
   const cat = Number(query.get('category') || 0);
   const q = str(query.get('q') || '');
-  const fields = 'id, category_id, name_ar, name_en, description, price, old_price, image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json, color_hex_json, variants_json, (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS avg_rating, (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS rating_count';
+  // السعر والخصم الافتراضيان من التصنيف يُورَّثان للمنتج عند عدم تحديده locally
+  const catPrice = 'COALESCE((SELECT default_price FROM categories WHERE id=p.category_id),0)';
+  const catDisc = 'COALESCE((SELECT default_discount FROM categories WHERE id=p.category_id),0)';
+  const basePrice = `(CASE WHEN p.price>0 THEN p.price ELSE ${catPrice} END)`;
+  const fields = `id, category_id, name_ar, name_en, description,
+    ${basePrice} AS price,
+    CASE WHEN p.old_price>0 THEN p.old_price
+         WHEN ${catDisc}>0 AND ${basePrice}>0 THEN ROUND(${basePrice} / (1 - ${catDisc}/100.0), 2)
+         ELSE 0 END AS old_price,
+    ${catPrice} AS cat_price, ${catDisc} AS cat_discount,
+    image_url, icon, stock, colors_json, sizes_json, images_json, color_images_json, color_hex_json, variants_json,
+    (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.id) AS avg_rating,
+    (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id) AS rating_count`;
   let rows;
   if (cat) {
     const ids = [cat, ...all('SELECT id FROM categories WHERE parent_id=?', cat).map(r => Number(r.id))];
@@ -491,16 +503,18 @@ add('GET', '/api/admin/categories', () => ({ items: all('SELECT * FROM categorie
 add('POST', '/api/admin/categories', ({ body }) => {
   const name = str(body.name_ar);
   if (!name) return { status: 400, body: { error: 'اسم الصنف مطلوب' } };
-  const info = run('INSERT INTO categories (name_ar,name_en,description,icon,active,sort_order,has_options,colors_json,sizes_json,parent_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+  const info = run('INSERT INTO categories (name_ar,name_en,description,icon,active,sort_order,has_options,colors_json,sizes_json,parent_id,default_price,default_discount,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
     name, str(body.name_en), str(body.description), str(body.icon) || '📦', body.active === false ? 0 : 1,
-    num(body.sort_order), body.has_options ? 1 : 0, str(body.colors_json), str(body.sizes_json), num(body.parent_id), now());
+    num(body.sort_order), body.has_options ? 1 : 0, str(body.colors_json), str(body.sizes_json), num(body.parent_id),
+    num(body.default_price), num(body.default_discount), now());
   return { ok: true, id: Number(info.lastInsertRowid) };
 }, { auth: true });
 add('PUT', '/api/admin/categories/:id', ({ params, body }) => {
   const id = num(params.id);
-  run('UPDATE categories SET name_ar=?,name_en=?,description=?,icon=?,active=?,sort_order=?,has_options=?,colors_json=?,sizes_json=?,parent_id=? WHERE id=?',
+  run('UPDATE categories SET name_ar=?,name_en=?,description=?,icon=?,active=?,sort_order=?,has_options=?,colors_json=?,sizes_json=?,parent_id=?,default_price=?,default_discount=? WHERE id=?',
     str(body.name_ar), str(body.name_en), str(body.description), str(body.icon) || '📦', body.active === false ? 0 : 1,
-    num(body.sort_order), body.has_options ? 1 : 0, str(body.colors_json), str(body.sizes_json), num(body.parent_id), id);
+    num(body.sort_order), body.has_options ? 1 : 0, str(body.colors_json), str(body.sizes_json), num(body.parent_id),
+    num(body.default_price), num(body.default_discount), id);
   return { ok: true };
 }, { auth: true });
 add('DELETE', '/api/admin/categories/:id', ({ params }) => {

@@ -128,6 +128,8 @@ ensureColumn('categories', 'has_options', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('categories', 'colors_json', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('categories', 'sizes_json', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('categories', 'parent_id', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('categories', 'default_price', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('categories', 'default_discount', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'customer_id', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('orders', 'latitude', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'longitude', 'REAL NOT NULL DEFAULT 0');
