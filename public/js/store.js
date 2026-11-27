@@ -464,7 +464,7 @@
   function renderChips() {
     const parents = state.categories.filter(c => !Number(c.parent_id));
     $('categoryChips').innerHTML = `<button class="chip${state.activeCat === 0 && !state.offersOnly ? ' active' : ''}" data-cat="0">الكل</button>` +
-      `<button class="chip${state.offersOnly ? ' active' : ''}" data-offer="1">🔥 العروض</button>` +
+      `<button class="chip${state.offersOnly ? ' active' : ''}" data-offer="1">🔥 عروض الخصم</button>` +
       parents.map(c => {
         const kids = state.categories.filter(x => Number(x.parent_id) === c.id);
         return `<button class="chip${state.activeCat === c.id || state.activeParent === c.id ? ' active' : ''}" data-cat="${c.id}">${esc(c.icon && !c.icon.startsWith('/') ? c.icon : '📦')} ${esc(c.name_ar)}${kids.length ? ' ▾' : ''}</button>`;
