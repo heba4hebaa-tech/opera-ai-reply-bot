@@ -623,7 +623,27 @@
     if ((existing?.qty || 0) + qty > available) { toast(`الكمية المتوفرة ${available} فقط`, true); return; }
     const key = `${id}|${options}`; const exist = state.cart.find(x => x.key === key);
     if (exist) exist.qty += qty; else state.cart.push({ key, id, name: p.name_ar, price: p.price, qty, icon: p.image_url || p.icon, options, color, size });
-    saveCart(); if (!silent) toast(`تمت الإضافة: ${p.name_ar}${options ? ' (' + options + ')' : ''}`);
+    saveCart(); if (!silent) cartToast(p, qty, options);
+  }
+  function cartToast(p, qty, options) {
+    const box = $('toast'); if (!box) return;
+    const el = document.createElement('div');
+    el.className = 'toast-item cart-toast';
+    const img = p.image_url && /^\/|^https?:/.test(p.image_url)
+      ? `<img src="${esc(p.image_url)}" alt="" onerror="this.remove()">`
+      : `<span class="ct-emoji">${esc(p.icon || '🛍️')}</span>`;
+    el.innerHTML = `${img}<span class="ct-txt"><b>تمت الإضافة إلى السلة ✓</b><small>${esc(p.name_ar)}${options ? ' · ' + esc(options) : ''} × ${qty}</small></span>`;
+    box.appendChild(el);
+    setTimeout(() => el.remove(), 3600);
+    try {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('تمت الإضافة إلى السلة ✓', {
+          body: `${p.name_ar} × ${qty}`,
+          icon: (p.image_url && /^\/|^https?:/.test(p.image_url)) ? p.image_url : '/icon-192.png',
+          tag: 'lunzera-cart',
+        });
+      }
+    } catch {}
   }
   function pushRecent(id) { try { const r = JSON.parse(localStorage.getItem('opera_recent') || '[]'); localStorage.setItem('opera_recent', JSON.stringify([Number(id), ...r.filter(x => Number(x) !== Number(id))].slice(0, 12))); } catch {} }
 
@@ -702,7 +722,7 @@
   function saveCart() { localStorage.setItem('opera_cart', JSON.stringify(state.cart)); updateBadges(); renderCart(); }
 
   function addToCart(id, options, variant) {
-    addToCartQty(id, options, 1, true, variant);
+    addToCartQty(id, options, 1, false, variant);
   }
 
   function renderCart() {
