@@ -567,12 +567,46 @@
     if (r.ok) { toast(r.enabled ? 'تم تفعيل الرد التلقائي ✓' : 'تم إيقاف الرد التلقائي ⏸️'); refreshWaStatus(); loadNotifications(); }
     else toast(r.error || 'تعذر التغيير', true);
   });
+  async function refreshMsStatus() {
+    try {
+      const s = await api('/api/admin/messenger/status');
+      const el = $('msStatus'); if (el) el.textContent = `الصفحة الحالية: ${s.pageId || '—'} · ${s.hasToken ? 'التوكن جاهز' : 'التوكن مفقود'}`;
+      const a = $('msLinkPreview'); if (a && s.link) { a.href = s.link; a.textContent = 'رابط m.me ←'; }
+      const p = $('msNewPageId'); if (p && !p.value && s.pageId) p.placeholder = s.pageId;
+    } catch {}
+  }
+  refreshMsStatus();
+  $('msSetPage')?.addEventListener('click', async () => {
+    const page_id = $('msNewPageId').value.trim(); const page_token = $('msNewToken').value.trim();
+    if (!page_id && !page_token) { toast('أدخل معرّف الصفحة أو التوكن', true); return; }
+    const r = await api('/api/admin/messenger/set-page', { method: 'POST', body: { page_id, page_token } });
+    if (r.ok) { toast('تم تغيير صفحة مسنجر ✓'); refreshMsStatus(); loadNotifications(); $('msNewPageId').value = ''; $('msNewToken').value = ''; }
+    else toast(r.error || 'تعذر التغيير', true);
+  });
+  $('msCheck')?.addEventListener('click', async () => {
+    const out = $('msStatus'); out.textContent = 'جارٍ التحقق...';
+    const r = await api('/api/admin/test-messenger', { method: 'POST', body: {} });
+    out.textContent = r.ok ? `✅ ${r.pageName || r.pageId || 'الصفحة تعمل'}` : '❌ ' + (r.error || 'تعذر التحقق');
+  });
+
   $('waSetNumber')?.addEventListener('click', async () => {
     const number = $('waNewNumber').value.trim(); const phone_id = $('waNewId').value.trim();
     if (!number && !phone_id) { toast('أدخل الرقم أو Phone Number ID', true); return; }
     const r = await api('/api/admin/wa/set-number', { method: 'POST', body: { number, phone_id } });
     if (r.ok) { toast('تم تغيير رقم واتساب ✓'); refreshWaStatus(); loadNotifications(); $('waNewNumber').value = ''; $('waNewId').value = ''; }
     else toast(r.error || 'تعذر التغيير', true);
+  });
+
+  $('waGuide')?.addEventListener('click', () => {
+    modal('تغيير رقم المرسل 📱', `<div class="card" style="background:var(--bg-soft);">
+      <p class="small">لتغيير رقم الرد نهائياً من التطبيق:</p>
+      <ol class="small" style="line-height:2;">
+        <li>إن كان الرقم <b>مضافاً أصلاً</b> في حساب واتساب الأعمال: انسخ <b>Phone Number ID</b> الخاص به من Meta Business Suite ← أرقام الهاتف ← الإعدادات، والصقه في الحقل أعلاه واضغط «تغيير الرقم». الردود تتحول فوراً.</li>
+        <li>إن كان <b>رقماً جديداً</b>: يجب إضافته وتأكيده <b>مرة واحدة فقط</b> من Meta، ثم يظهر معرّفه ويُطبَّق من التطبيق بعد ذلك مثل أي رقم سابق.</li>
+        <li>لإيقاف الرد على الرقم الحالي اضغط زر الإيقاف أعلاه — لا حاجة لميتا.</li>
+      </ol>
+      <a class="btn btn-ghost btn-sm" href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?business_id=2044106676285639" target="_blank" rel="noopener">فتح أرقام واتساب في ميتا (للمرة الأولى فقط)</a>
+    </div>`);
   });
 
   $('testWhatsapp').onclick = async () => {

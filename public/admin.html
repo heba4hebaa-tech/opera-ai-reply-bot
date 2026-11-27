@@ -185,6 +185,7 @@
               <div class="row wrap" style="gap:8px;">
                 <button class="btn btn-sm" id="waToggleBtn">…</button>
                 <button class="btn btn-ghost btn-sm" id="testWhatsapp">🔍 تحقق من الرقم</button>
+                <button class="btn btn-ghost btn-sm" id="waGuide">📖 دليل التغيير</button>
               </div>
               <div class="row wrap" style="gap:8px;margin-top:8px;">
                 <input id="waNewNumber" placeholder="رقم جديد 2189xxxxxxxx" style="flex:1;min-width:150px;">
@@ -193,6 +194,20 @@
               </div>
               <span id="waTestResult" class="small muted"></span>
               <p class="small muted" style="margin:6px 0 0;">عند الإيقاف تُحفظ رسائل الزبائن دون رد تلقائي. تغيير الرقم يُطبَّق فوراً بدون إعادة تشغيل.</p>
+            </div>
+            <div class="card" style="background:var(--bg-soft);margin:10px 0;">
+              <h4 style="margin:0 0 8px;">💬 تبديل صفحة مسنجر</h4>
+              <div class="row wrap" style="gap:8px;">
+                <input id="msNewPageId" placeholder="معرّف الصفحة الجديد" style="flex:1;min-width:150px;">
+                <input id="msNewToken" type="password" placeholder="Page Access Token (اختياري)" style="flex:1;min-width:180px;">
+                <button class="btn btn-primary btn-sm" id="msSetPage">تغيير الصفحة</button>
+              </div>
+              <div class="row wrap" style="gap:8px;margin-top:8px;">
+                <button class="btn btn-ghost btn-sm" id="msCheck">🔍 تحقق من الصفحة</button>
+                <a id="msLinkPreview" class="small" href="#" target="_blank" rel="noopener"></a>
+              </div>
+              <span id="msStatus" class="small muted"></span>
+              <p class="small muted" style="margin:6px 0 0;">بعد التغيير تُرسل الردود من الصفحة الجديدة فوراً — لا حاجة للعودة إلى ميتا.</p>
             </div>
             <div class="form-row"><label>رابط الكتالوج (اختياري)</label><input id="set_catalog_url" placeholder="https://..."></div>
             <div class="form-row"><label>📱 رابط التطبيق (يُرسل للزبون إذا طلبه)</label><input id="set_app_link" placeholder="https://opera-ai-reply-bot.onrender.com"></div>

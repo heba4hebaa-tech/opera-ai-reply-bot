@@ -841,6 +841,25 @@ add('POST', '/api/admin/wa/set-number', ({ body }) => {
   return { ok: true, number: number || getSettings().whatsapp_number || '', phoneId: phoneId || getSettings().wa_phone_number_id || '' };
 }, { auth: true });
 
+// تبديل صفحة مسنجر من التطبيق بدون العودة إلى ميتا
+add('GET', '/api/admin/messenger/status', () => {
+  const s = getSettings();
+  const pid = s.messenger_page_id || config.FACEBOOK_PAGE_ID || '';
+  return { ok: true, pageId: pid, link: s.messenger_link || (pid ? `https://m.me/${pid}` : ''), hasToken: !!(s.messenger_page_token || config.MESSENGER_PAGE_TOKEN || s.facebook_page_token) };
+}, { auth: true });
+add('POST', '/api/admin/messenger/set-page', ({ body }) => {
+  const pageId = str(body.page_id);
+  const token = str(body.page_token);
+  const link = str(body.link);
+  if (!pageId && !token) return { status: 400, body: { error: 'أدخل معرّف الصفحة أو توكن الصفحة' } };
+  if (pageId) { setSetting('messenger_page_id', pageId); setSetting('facebook_page_id', pageId); setSetting('messenger_link', `https://m.me/${pageId}`); }
+  if (token) setSetting('messenger_page_token', token);
+  if (link) setSetting('messenger_link', link);
+  try { run('INSERT INTO notifications (title,message,platform,target,created_at) VALUES (?,?,?,?,?)', 'صفحة مسنجر', `تم تحديث صفحة الرد${pageId ? ' إلى ' + pageId : ''} — الردود تتحول فوراً`, 'app', 'all', now()); } catch {}
+  const s = getSettings();
+  return { ok: true, pageId: s.messenger_page_id || '', link: s.messenger_link || '' };
+}, { auth: true });
+
 add('GET', '/api/admin/push/subscribers', () => ({ items: all('SELECT id, endpoint, user_agent, created_at FROM push_subscriptions ORDER BY id DESC'), count: get('SELECT COUNT(*) AS n FROM push_subscriptions').n }), { auth: true });
 add('DELETE', '/api/admin/push/subscribers/:id', ({ params }) => {
   run('DELETE FROM push_subscriptions WHERE id=?', num(params.id));
