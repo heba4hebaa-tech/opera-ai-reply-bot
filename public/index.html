@@ -86,7 +86,9 @@
   <!-- شريط العروض الأفقي -->
   <section class="rail-sec reveal" id="dealsSec" hidden>
     <div class="section-title" style="margin-top:26px;">
-      <div><h2>🔥 عروض اليوم</h2><p>منتجات بخصومات لفترة محدودة</p></div>
+      <div><h2>🔥 عروض اليوم</h2><p>منتجات بخصومات لفترة محدودة</p>
+        <div class="deal-timer" id="dealTimer" aria-label="الوقت المتبقي">⏳ --:--:--</div>
+      </div>
       <button class="rail-nav" data-rail="dealsRail" data-dir="1" aria-label="التالي">‹</button>
       <button class="rail-nav" data-rail="dealsRail" data-dir="-1" aria-label="السابق">›</button>
     </div>
@@ -103,6 +105,16 @@
     <div class="rail no-bar" id="featuredRail"></div>
   </section>
 
+  <!-- شريط شاهدت مؤخراً -->
+  <section class="rail-sec reveal" id="recentSec" hidden>
+    <div class="section-title" style="margin-top:26px;">
+      <div><h2>👀 شاهدت مؤخراً</h2><p>عُد لما فتنتك في زيارتك السابقة</p></div>
+      <button class="rail-nav" data-rail="recentRail" data-dir="1" aria-label="التالي">‹</button>
+      <button class="rail-nav" data-rail="recentRail" data-dir="-1" aria-label="السابق">›</button>
+    </div>
+    <div class="rail no-bar" id="recentRail"></div>
+  </section>
+
   <!-- مزايا المتجر -->
   <section class="feat-grid reveal" aria-label="مزايا المتجر">
     <div class="feat-card"><span class="f-ic">🚚</span><b>توصيل سريع</b><p>نوصل طلبك لباب منزلك بسرعة وأمان</p></div>
@@ -117,7 +129,17 @@
   </div>
   <div class="chips no-bar" id="categoryChips"></div>
   <div class="chips no-bar" id="subChips" style="display:none;margin-top:9px;"></div>
-  <div class="search-app" id="searchBar" style="margin:14px 0;">🔎 <input id="searchInput" type="search" placeholder="ابحث عن منتج، لون، مقاس..." aria-label="بحث"></div>
+  <div class="search-app" id="searchBar" style="margin:14px 0;position:relative;">🔎 <input id="searchInput" type="search" placeholder="ابحث عن منتج، لون، مقاس..." aria-label="بحث" autocomplete="off">
+    <div class="search-suggest no-bar" id="searchSuggest" hidden></div>
+  </div>
+  <div class="sort-bar no-bar" id="sortBar" role="toolbar" aria-label="ترتيب المنتجات">
+    <span class="sort-lab">ترتيب:</span>
+    <button class="s-btn active" data-sort="new">🆕 الأحدث</button>
+    <button class="s-btn" data-sort="price-asc">💸 الأقل سعراً</button>
+    <button class="s-btn" data-sort="price-desc">💎 الأعلى سعراً</button>
+    <button class="s-btn" data-sort="rating">⭐ الأعلى تقييماً</button>
+    <button class="s-btn" data-sort="discount">🔥 أكبر خصم</button>
+  </div>
   <!-- لافتات إعلانية -->
   <div class="ads-banner" id="adsBanner" hidden></div>
   <div class="p-grid" id="productGrid">

@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-  const state = { info: {}, categories: [], products: [], activeCat: 0, activeParent: 0, offersOnly: false, cart: [], customer: null, ads: [], query: '', chat: [], chatBusy: false, notifications: [], seenNotifs: [] };
+  const state = { info: {}, categories: [], products: [], activeCat: 0, activeParent: 0, offersOnly: false, cart: [], customer: null, ads: [], query: '', chat: [], chatBusy: false, notifications: [], seenNotifs: [], appliedCoupon: null, sortBy: 'new' };
   try { state.seenNotifs = JSON.parse(localStorage.getItem('opera_seen_notifs') || '[]') || []; } catch { state.seenNotifs = []; }
   try { state.cart = JSON.parse(localStorage.getItem('opera_cart') || '[]') || []; } catch { state.cart = []; }
   try { state.chat = JSON.parse(localStorage.getItem('opera_chat') || '[]') || []; } catch { state.chat = []; }
@@ -363,6 +363,7 @@
     renderInfo(); renderChips(); renderProducts(); renderCustomer(); renderAds(); wireSearch(); wireScroll(); wireTabs(); wireChat(); wireHeader();
     updateBadges(); renderChat(); hideSplash(); autoAds();
     renderCatCircles(); renderRails(); renderReviewsRail(); wireRails(); wireReveal(); wireToTop(); animateStats();
+    wireSort(); renderRecent(); startDealTimer();
     loadNotifications();
     setInterval(() => loadNotifications(true), 60000); // فحص التنبيهات كل دقيقة
     if (location.hash.startsWith('#p')) {
@@ -574,7 +575,78 @@
     const inp = $('searchInput');
     if (!inp || inp.dataset.wired) return;
     inp.dataset.wired = '1';
-    inp.oninput = () => { state.query = inp.value.trim(); renderProducts(); };
+    inp.oninput = () => { state.query = inp.value.trim(); renderProducts(); renderSuggest(); };
+    inp.onfocus = renderSuggest;
+    inp.onblur = () => setTimeout(() => { const s = $('searchSuggest'); if (s) s.hidden = true; }, 220);
+  }
+
+  // ================= اقتراحات بحث فورية =================
+  function renderSuggest() {
+    const box = $('searchSuggest'), inp = $('searchInput');
+    if (!box || !inp) return;
+    const q = inp.value.trim().toLowerCase();
+    if (!q) { box.hidden = true; return; }
+    const hits = state.products.filter(p =>
+      (p.name_ar + ' ' + (p.name_en || '') + ' ' + (p.description || '')).toLowerCase().includes(q)
+    ).slice(0, 6);
+    if (!hits.length) { box.hidden = true; return; }
+    const cur = state.info.currency || '';
+    box.hidden = false;
+    box.innerHTML = hits.map(p => {
+      const img = p.image_url && /^\/|^https?:/.test(p.image_url) ? `<img src="${esc(p.image_url)}" alt="" onerror="this.replaceWith(document.createTextNode('🛍️'))">` : `<span>${esc(p.icon || '🛍️')}</span>`;
+      const d = Number(p.discount_percent) || 0;
+      return `<button type="button" class="sg-item" data-sg="${p.id}">
+        <span class="sg-ic">${img}</span>
+        <span class="sg-txt"><b>${esc(p.name_ar)}</b><small>${money(p.price, cur)}${d ? ` · 🔥 خصم ${d}%` : ''}</small></span>
+      </button>`;
+    }).join('');
+    box.querySelectorAll('[data-sg]').forEach(b => b.onmousedown = e => {
+      e.preventDefault();
+      const p = state.products.find(x => x.id === Number(b.dataset.sg));
+      box.hidden = true;
+      if (p) openProductModal(p);
+    });
+  }
+
+  // ================= شريط الترتيب =================
+  function wireSort() {
+    const bar = $('sortBar'); if (!bar || bar.dataset.wired) return;
+    bar.dataset.wired = '1';
+    bar.querySelectorAll('[data-sort]').forEach(b => b.onclick = () => {
+      state.sortBy = b.dataset.sort;
+      bar.querySelectorAll('.s-btn').forEach(x => x.classList.toggle('active', x === b));
+      renderProducts();
+    });
+  }
+
+  // ================= شاهدت مؤخراً =================
+  function renderRecent() {
+    const sec = $('recentSec'), rail = $('recentRail');
+    if (!sec || !rail) return;
+    let ids = []; try { ids = JSON.parse(localStorage.getItem('opera_recent') || '[]'); } catch {}
+    const list = ids.map(id => state.products.find(p => p.id === Number(id))).filter(Boolean).slice(0, 10);
+    if (!list.length) { sec.hidden = true; return; }
+    sec.hidden = false;
+    rail.innerHTML = list.map(p => railCard(p, state.info.currency || '')).join('');
+    wireRailCards(rail);
+  }
+
+  // ================= عدّاد العروض (ينتهي منتصف الليل) =================
+  let dealTimerHandle = null;
+  function startDealTimer() {
+    const el = $('dealTimer'); if (!el) return;
+    const tick = () => {
+      const now = new Date();
+      const end = new Date(now); end.setHours(24, 0, 0, 0);
+      let s = Math.max(0, Math.floor((end - now) / 1000));
+      const h = String(Math.floor(s / 3600)).padStart(2, '0');
+      const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+      const sec = String(s % 60).padStart(2, '0');
+      el.textContent = `⏳ ينتهي خلال ${h}:${m}:${sec}`;
+    };
+    tick();
+    if (dealTimerHandle) clearInterval(dealTimerHandle);
+    dealTimerHandle = setInterval(tick, 1000);
   }
 
   function adCard(a, badge) {
@@ -699,6 +771,7 @@
     const discount = Number(p.discount_percent) || (p.old_price && Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0);
     const mainImg = (colorMap[colors[0]] || images[0] || p.image_url || p.icon);
     pushRecent(p.id);
+    setTimeout(renderRecent, 600);
     const html = `<div class="pd">
       <div class="pd-gallery"><div class="pd-main" id="pm_img">${icons(mainImg)}</div>
         <div class="pd-thumbs" id="pm_thumbs">${(images.length ? images : [p.icon]).filter(u => /^\/|^https?:/.test(String(u || ''))).map((u, i) => `<button type="button" class="pd-thumb${i===0?' active':''}" data-i="${i}"><img src="${esc(u)}" onerror="this.style.display='none'"></button>`).join('')}</div></div>
@@ -711,7 +784,15 @@
         ${colors.length ? `<div class="pd-opt"><label>اللون</label><div class="pd-choices pd-colors" id="pm_colors">${colors.map((c,i)=>`<button type="button" class="pd-choice pd-color${i===0?' active':''}" data-color="${esc(c)}" title="${esc(c)}"><span class="color-dot" style="background:${esc(hexMap[c] || '#cbd5e1')}"></span><small>${esc(c)}</small></button>`).join('')}</div></div>` : ''}
         ${sizes.length ? `<div class="pd-opt"><label>المقاس</label><div class="pd-choices" id="pm_sizes">${sizes.map((s,i)=>`<button type="button" class="pd-choice${i===0?' active':''}" data-size="${esc(s)}">${esc(s)}</button>`).join('')}</div></div>` : ''}
         <div class="pd-opt"><label>الكمية</label><div class="pd-qty"><button type="button" id="pm_minus">−</button><input id="pm_qty" type="number" min="1" value="1"><button type="button" id="pm_plus">+</button></div></div>
-        <div class="pd-actions"><button class="btn btn-ghost" id="pm_fav">${isFav(p.id)?'❤️':'🤍'} مفضّلة</button><button class="btn btn-ghost" id="pm_share">🔗 مشاركة</button></div>
+        <div class="pd-actions"><button class="btn btn-ghost" id="pm_fav">${isFav(p.id)?'❤️':'🤍'} مفضّلة</button><button class="btn btn-ghost" id="pm_share">🔗 مشاركة</button><button class="btn btn-ghost" id="pm_wa">📱 واتساب</button></div>
+        ${out ? `<div class="stock-alert-box" id="pm_alertBox">
+          <b>🔔 أخبرني عند التوفر</b>
+          <p>أدخل رقمك وسنرسل لك إشعاراً فور عودة المنتج</p>
+          <div class="row" style="gap:8px;">
+            <input id="pm_alertPhone" dir="ltr" placeholder="0945343522" inputmode="tel" style="flex:1;">
+            <button class="btn-app primary sm" id="pm_alertGo">اشتراك</button>
+          </div>
+        </div>` : ''}
         <div class="modal-foot" style="border:0;"><button class="btn btn-ghost" id="pm_add" ${out?'disabled':''}>🛒 أضف للسلة</button><button class="btn btn-primary" id="pm_order" ${out?'disabled':''}>⚡ طلب مباشر</button></div>
       </div></div>
       <div class="divider-app"></div>
@@ -749,6 +830,28 @@
     root.querySelector('#pm_order')?.addEventListener('click', () => { addToCartQty(p.id, opts(), qty(), true, variant()); mm.close(); checkout(); });
     root.querySelector('#pm_fav')?.addEventListener('click', (e) => { const on = toggleFav(p.id); e.target.textContent = (on ? '❤️' : '🤍') + ' مفضّلة'; });
     root.querySelector('#pm_share')?.addEventListener('click', async () => { const url = location.origin + '/#p' + p.id; try { if (navigator.share) await navigator.share({ title: p.name_ar, url }); else { await navigator.clipboard.writeText(url); toast('تم نسخ الرابط ✓'); } } catch { toast(url); } });
+    root.querySelector('#pm_wa')?.addEventListener('click', () => {
+      const wa = String(state.info.whatsappNumber || '').replace(/\D/g, '');
+      if (!wa) { toast('لم يتم ضبط رقم واتساب بعد', true); return; }
+      const txt = `مرحباً، أستفسر عن المنتج: ${p.name_ar} — ${money(p.price, state.info.currency)}%0A${location.origin}/#p${p.id}`;
+      window.open(`https://wa.me/${wa}?text=${txt}`, '_blank', 'noopener');
+    });
+    root.querySelector('#pm_alertGo')?.addEventListener('click', async () => {
+      const phone = (root.querySelector('#pm_alertPhone')?.value || '').trim();
+      if (phone.replace(/\D/g, '').length < 7) { toast('أدخل رقم جوال صحيح', true); return; }
+      const btn = root.querySelector('#pm_alertGo');
+      btn.disabled = true; btn.textContent = 'جارٍ…';
+      try {
+        const r = await fetch('/api/stock-alerts', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product_id: p.id, phone, color: selColor, size: selSize }),
+        }).then(x => x.json());
+        if (r.ok) {
+          root.querySelector('#pm_alertBox').innerHTML = `<b>✅ تم تسجيلك بنجاح</b><p>سنرسل لك إشعاراً فور توفر «${esc(p.name_ar)}» — لا تقلق، لن نزعجك بغير ذلك.</p>`;
+          toast('سنخبرك عند التوفر 🔔');
+        } else { toast(r.error || 'تعذر التسجيل', true); btn.disabled = false; btn.textContent = 'اشتراك'; }
+      } catch { toast('تعذر الاتصال', true); btn.disabled = false; btn.textContent = 'اشتراك'; }
+    });
     root.querySelectorAll('[data-rel]').forEach(b => b.onclick = () => { const r = state.products.find(x => x.id === Number(b.dataset.rel)); mm.close(); openProductModal(r); });
     loadReviews(p, root, cur);
     updateStockBadge();
@@ -849,6 +952,16 @@
       list = state.products.filter(p => ids.includes(p.category_id));
     }
     if (q) list = list.filter(p => norm(p.name_ar).includes(q) || norm(p.name_en).includes(q) || norm(p.description).includes(q));
+    // الترتيب حسب اختيار المستخدم
+    const disc = p => Number(p.discount_percent) || (Number(p.old_price) > Number(p.price) ? Math.round((1 - Number(p.price) / Number(p.old_price)) * 100) : 0);
+    const sorters = {
+      'new': (a, b) => b.id - a.id,
+      'price-asc': (a, b) => Number(a.price) - Number(b.price),
+      'price-desc': (a, b) => Number(b.price) - Number(a.price),
+      'rating': (a, b) => (Number(b.avg_rating) || 0) - (Number(a.avg_rating) || 0) || (Number(b.rating_count) || 0) - (Number(a.rating_count) || 0),
+      'discount': (a, b) => disc(b) - disc(a),
+    };
+    list = [...list].sort(sorters[state.sortBy] || sorters['new']);
     const pc = $('productCount'); if (pc) pc.textContent = `${list.length} منتج`;
     const grid = $('productGrid'); if (!grid) return;
     if (!list.length) { grid.innerHTML = `<div class="empty-app" style="grid-column:1/-1;"><span class="big">📭</span><h4>${q ? 'لا توجد نتائج لبحثك' : 'لا توجد منتجات'}</h4><p>جرّب كلمة أخرى أو تصفح كل الأصناف</p></div>`; return; }
@@ -1122,16 +1235,52 @@
       <span class="small muted" id="coCoords">${c.latitude ? `${Number(c.latitude).toFixed(4)}, ${Number(c.longitude).toFixed(4)}` : 'بدون موقع'}</span></div>
       <input type="hidden" id="co_lat" value="${c.latitude || 0}"><input type="hidden" id="co_lng" value="${c.longitude || 0}">
       <div class="field"><label>طريقة التوصيل</label><select id="co_method">${(state.info.deliveryMethods || ['توصيل للمنزل', 'استلام من المتجر']).map(mm => `<option>${esc(mm)}</option>`).join('')}</select></div>
+      <div class="field"><label>🎟️ كوبون خصم (اختياري)</label>
+        <div class="row" style="gap:8px;">
+          <input id="co_coupon" dir="ltr" placeholder="مثال: SAVE20" style="text-transform:uppercase;font-family:monospace;" value="${esc(state.appliedCoupon?.code || '')}">
+          <button type="button" class="btn-app ghost sm" id="coApplyCoupon" style="white-space:nowrap;">تطبيق</button>
+        </div>
+        <div class="hint" id="couponHint">${state.appliedCoupon ? `✅ خصم ${money(state.appliedCoupon.discount, cur)} مطبّق` : 'لديك كود خصم؟ طبّقه هنا لتوفير المزيد'}</div>
+      </div>
       <p class="muted-app">${esc(state.info.deliveryNote || '')}</p>
       <div class="field"><label>ملاحظات</label><textarea id="co_notes" rows="2"></textarea></div>
-      <div class="info-card" style="margin-bottom:0;">
+      <div class="info-card" style="margin-bottom:0;" id="coSummary">
         <div class="order-row"><span>المجموع الفرعي</span><b>${money(state.cart.reduce((s,i)=>s+i.price*i.qty,0), cur)}</b></div>
         <div class="order-row"><span>رسوم التوصيل</span><b>${money(fee, cur)}</b></div>
-        <div class="order-row"><span>الإجمالي</span><b style="color:var(--app-brand-ink);font-size:17px;">${money(state.cart.reduce((s,i)=>s+i.price*i.qty,0) + fee, cur)}</b></div>
+        <div class="order-row" id="coDiscRow" style="${state.appliedCoupon ? '' : 'display:none;'}"><span>🎟️ الخصم</span><b style="color:#16a34a;" id="coDiscVal">—</b></div>
+        <div class="order-row"><span>الإجمالي</span><b style="color:var(--app-brand-ink);font-size:17px;" id="coTotalVal">${money(state.cart.reduce((s,i)=>s+i.price*i.qty,0) + fee, cur)}</b></div>
       </div>
       <div class="modal-foot"><button type="button" class="btn-app ghost" data-close>إلغاء</button><button class="btn-app primary" type="submit">تأكيد الطلب</button></div>
     </form>`);
     m.el.querySelector('#coMap').onclick = () => mapModal();
+    const sub = state.cart.reduce((s, i) => s + i.price * i.qty, 0);
+    const refreshSummary = () => {
+      const disc = state.appliedCoupon?.discount || 0;
+      const tot = Math.max(0, sub + fee - disc);
+      const dr = m.el.querySelector('#coDiscRow'), dv = m.el.querySelector('#coDiscVal'), tv = m.el.querySelector('#coTotalVal');
+      if (dr) dr.style.display = disc > 0 ? '' : 'none';
+      if (dv) dv.textContent = '− ' + money(disc, cur);
+      if (tv) tv.textContent = money(tot, cur);
+      const hint = m.el.querySelector('#couponHint');
+      if (hint) hint.textContent = disc > 0 ? `✅ خصم ${money(disc, cur)} مطبّق على طلبك` : 'لديك كود خصم؟ طبّقه هنا لتوفير المزيد';
+    };
+    if (state.appliedCoupon) refreshSummary();
+    m.el.querySelector('#coApplyCoupon')?.addEventListener('click', async () => {
+      const code = (m.el.querySelector('#co_coupon')?.value || '').trim();
+      const hint = m.el.querySelector('#couponHint');
+      if (!code) { state.appliedCoupon = null; refreshSummary(); return; }
+      if (hint) hint.textContent = 'جارٍ التحقق…';
+      try {
+        const r = await fetch('/api/coupons/validate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, subtotal: sub }),
+        }).then(x => x.json());
+        if (r.error) { state.appliedCoupon = null; refreshSummary(); if (hint) hint.textContent = '❌ ' + r.error; toast(r.error, true); return; }
+        state.appliedCoupon = { code: r.code, discount: r.discount };
+        refreshSummary();
+        toast(`تم تطبيق الكوبون ${r.code} — وفّرت ${money(r.discount, cur)} 🎉`);
+      } catch { if (hint) hint.textContent = 'تعذر الاتصال — حاول مجدداً'; }
+    });
     m.el.querySelector('#coGeo')?.addEventListener('click', () => {
       if (!navigator.geolocation) { toast('المتصفح لا يدعم تحديد الموقع', true); return; }
       toast('جارٍ تحديد موقعك بدقة...');
@@ -1149,11 +1298,12 @@
         customer_name: $('co_name').value, phone: $('co_phone').value, address: $('co_address').value,
         notes: $('co_notes').value, items_json: JSON.stringify(state.cart),
         delivery_method: $('co_method').value,
+        coupon_code: state.appliedCoupon?.code || '',
         latitude: Number($('co_lat').value), longitude: Number($('co_lng').value),
       } });
       btn.disabled = false; btn.textContent = 'تأكيد الطلب';
       if (!r.ok) { toast(r.error || 'تعذر إرسال الطلب', true); return; }
-      state.cart = []; saveCart(); closeCart(); m.close();
+      state.cart = []; state.appliedCoupon = null; saveCart(); closeCart(); m.close();
       const wa = String(state.info.whatsappNumber || '').replace(/\D/g, '');
       const waUrl = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(`مرحباً، أرسلت الطلب رقم ${r.orderId}`)}` : '';
       const payLines = [];

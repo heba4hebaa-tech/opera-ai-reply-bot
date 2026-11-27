@@ -3,7 +3,7 @@
   const $ = id => document.getElementById(id);
   const titles = {
     overview: 'نظرة عامة', categories: 'الأصناف', products: 'المنتجات', orders: 'الطلبات',
-    conversations: 'المحادثات', customers: 'الزبائن والتحقق', faqs: 'الأسئلة الشائعة', ads: 'الإعلانات', replies: 'ردود مخصصة', notifications: 'التنبيهات', tester: 'اختبار الرد', settings: 'الإعدادات', system: 'حالة النظام', security: 'كلمة المرور',
+    conversations: 'المحادثات', customers: 'الزبائن والتحقق', faqs: 'الأسئلة الشائعة', ads: 'الإعلانات', coupons: 'كوبونات وتنبيهات', replies: 'ردود مخصصة', notifications: 'التنبيهات', tester: 'اختبار الرد', settings: 'الإعدادات', system: 'حالة النظام', security: 'كلمة المرور',
   };
   const state = { me: null, categories: [], products: [] };
   const statusClass = s => ({ 'جديد': 'warn', 'قيد التحضير': 'ok', 'تم الشحن': '', 'مكتمل': 'ok', 'ملغي': 'bad' }[s] || '');
@@ -43,7 +43,7 @@
     if (!me.user) { location.href = '/login'; return; }
     state.me = me.user;
     wireNav();
-    await Promise.all([loadOverview(), loadCategories(), loadProducts(), loadOrders(), loadConversations(), loadCustomers(), loadFaqs(), loadSettings(), loadAds(), loadReplies(), loadNotifications(), loadPostRules()]);
+    await Promise.all([loadOverview(), loadCategories(), loadProducts(), loadOrders(), loadConversations(), loadCustomers(), loadFaqs(), loadSettings(), loadAds(), loadReplies(), loadNotifications(), loadPostRules(), loadCoupons()]);
   }
 
   let sysTimer = null;
@@ -599,6 +599,90 @@
       const r = await api(a.id ? '/api/admin/ads/' + a.id : '/api/admin/ads', { method: a.id ? 'PUT' : 'POST', body: payload });
       if (r.error) { toast(r.error, true); return; }
       m.close(); toast('تم الحفظ ✓'); loadAds();
+    });
+  }
+
+  // ================= كوبونات الخصم + تنبيهات التوفر =================
+  async function loadCoupons() {
+    const rows = $('couponRows'); if (!rows) return;
+    const d = await api('/api/admin/coupons').catch(() => null);
+    if (!d) return;
+    const items = d.items || [];
+    rows.innerHTML = items.length ? items.map(c => {
+      const discount = c.type === 'fixed' ? `${money(c.value, '')} د.ل` : `${c.value}%`;
+      const used = Number(c.max_uses) > 0 ? `${c.used_count}/${c.max_uses}` : `${c.used_count} ✓`;
+      const dates = [c.starts_at, c.ends_at].filter(Boolean).join(' ← ') || 'بلا انتهاء';
+      return `<tr>
+        <td><b style="font-family:monospace;font-size:15px;letter-spacing:1px;">${esc(c.code)}</b></td>
+        <td><span class="pill warn">🔥 ${discount}</span></td>
+        <td>${c.min_total ? money(c.min_total, '') : '—'}</td>
+        <td>${used}</td>
+        <td class="small muted">${esc(dates)}</td>
+        <td><span class="pill ${c.active ? 'ok' : 'bad'}">${c.active ? 'مفعّل' : 'متوقف'}</span></td>
+        <td><button class="btn btn-ghost btn-sm" data-ec="${c.id}">تعديل</button> <button class="btn btn-danger btn-sm" data-dc="${c.id}">حذف</button></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="7" class="empty">لا توجد كوبونات — أنشئ أول كوبون لبدء الخصومات</td></tr>`;
+    rows.querySelectorAll('[data-ec]').forEach(b => b.onclick = () => couponForm(items.find(c => c.id === Number(b.dataset.ec))));
+    rows.querySelectorAll('[data-dc]').forEach(b => b.onclick = () => confirmBox('حذف هذا الكوبون؟', async () => {
+      await api('/api/admin/coupons/' + b.dataset.dc, { method: 'DELETE' }); toast('تم الحذف'); loadCoupons();
+    }));
+    const addBtn = $('addCoupon'); if (addBtn) addBtn.onclick = () => couponForm();
+    renderAlerts(d.alerts || []);
+  }
+  function renderAlerts(alerts) {
+    const box = $('alertRows'); if (!box) return;
+    box.innerHTML = alerts.length ? alerts.map(a => `<tr>
+      <td><b>${esc(a.name_ar || 'منتج محذوف')}</b></td>
+      <td dir="ltr">${esc(a.phone)}</td>
+      <td class="small">${esc([a.color, a.size].filter(Boolean).join(' / ') || '—')}</td>
+      <td class="small muted">${fmtDate(a.created_at)}</td>
+      <td><span class="pill ${a.notified ? 'ok' : 'warn'}">${a.notified ? 'تم الإشعار' : 'ينتظر'}</span></td>
+      <td>${a.notified ? '' : `<button class="btn btn-primary btn-sm" data-na="${a.id}">🔔 إشعار</button> `}
+        <button class="btn btn-danger btn-sm" data-da2="${a.id}">حذف</button></td>
+    </tr>`).join('') : `<tr><td colspan="6" class="empty">لا توجد طلبات إشعار بعد — سيظهر هنا كل من ضغط «أخطرني عند التوفر» في المتجر</td></tr>`;
+    box.querySelectorAll('[data-na]').forEach(b => b.onclick = async () => {
+      b.disabled = true; b.textContent = 'جارٍ الإرسال…';
+      const r = await api('/api/admin/stock-alerts/' + b.dataset.na + '/notify', { method: 'POST', body: {} });
+      toast(r.pushed ? `تم إشعار ${r.pushed} مشترك ✓` : 'تم تسجيل الإشعار — لا يوجد مشتركون بعد');
+      loadCoupons();
+    });
+    box.querySelectorAll('[data-da2]').forEach(b => b.onclick = () => confirmBox('حذف الطلب؟', async () => {
+      await api('/api/admin/stock-alerts/' + b.dataset.da2, { method: 'DELETE' }); loadCoupons();
+    }));
+  }
+  function couponForm(c) {
+    c = c || {};
+    const m = modal(c.id ? 'تعديل كوبون' : 'كوبون خصم جديد 🎟️', `<form id="couponForm">
+      <div class="form-row two">
+        <div><label>الكود *</label><input name="code" value="${esc(c.code || '')}" placeholder="SAVE20" ${c.id ? 'readonly style="opacity:.7;"' : 'required'} dir="ltr" style="text-transform:uppercase;font-family:monospace;"></div>
+        <div><label>نوع الخصم</label><select name="type"><option value="percent" ${(c.type || 'percent') === 'percent' ? 'selected' : ''}>نسبة مئوية %</option><option value="fixed" ${c.type === 'fixed' ? 'selected' : ''}>مبلغ ثابت (د.ل)</option></select></div>
+      </div>
+      <div class="form-row two">
+        <div><label>قيمة الخصم *</label><input name="value" type="number" min="0" step="0.01" value="${c.value || 20}" required></div>
+        <div><label>الحد الأدنى للسلة (0 = بلا حد)</label><input name="min_total" type="number" min="0" step="0.01" value="${c.min_total || 0}"></div>
+      </div>
+      <div class="form-row two">
+        <div><label>عدد مرات الاستخدام (0 = بلا حد)</label><input name="max_uses" type="number" min="0" step="1" value="${c.max_uses || 0}"></div>
+        <div class="check" style="align-self:end;padding-bottom:10px;"><input type="checkbox" name="active" ${c.active === 0 ? '' : 'checked'}><label>مفعّل</label></div>
+      </div>
+      <div class="form-row two">
+        <div><label>يبدأ من (اختياري)</label><input name="starts_at" type="date" value="${esc(String(c.starts_at || '').slice(0, 10))}"></div>
+        <div><label>ينتهي في (اختياري)</label><input name="ends_at" type="date" value="${esc(String(c.ends_at || '').slice(0, 10))}"></div>
+      </div>
+      <div class="small muted" style="background:#f0f7ff;border-radius:10px;padding:10px;">💡 مثال: اكتب <b>20</b> بنسبة مئوية → خصم 20% من السلة. اكتب <b>50</b> بمبلغ ثابت → خصم 50 د.ل.</div>
+      <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close>إلغاء</button><button class="btn btn-primary">حفظ</button></div>
+    </form>`);
+    m.el.querySelector('#couponForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = {
+        code: fd.get('code'), type: fd.get('type'), value: Number(fd.get('value')),
+        min_total: Number(fd.get('min_total') || 0), max_uses: Number(fd.get('max_uses') || 0),
+        active: fd.get('active') === 'on', starts_at: fd.get('starts_at') || '', ends_at: fd.get('ends_at') || '',
+      };
+      const r = await api(c.id ? '/api/admin/coupons/' + c.id : '/api/admin/coupons', { method: c.id ? 'PUT' : 'POST', body: payload });
+      if (r.error) { toast(r.error, true); return; }
+      m.close(); toast('تم حفظ الكوبون ✓'); loadCoupons();
     });
   }
 

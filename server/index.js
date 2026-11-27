@@ -310,11 +310,20 @@ add('POST', '/api/store/orders', ({ body, customer }) => {
   const s2 = getSettings();
   const method = str(body.delivery_method) || 'توصيل للمنزل';
   const fee = method === 'توصيل للمنزل' && subtotal < num(s2.delivery_free_threshold) ? num(s2.delivery_fee) : 0;
-  const total = subtotal + fee;
-  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, latitude, longitude, delivery_fee, delivery_method, paid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  // كوبون الخصم (إن وُجد)
+  let discount = 0, couponCode = '';
+  if (str(body.coupon_code)) {
+    const cr = calcCoupon(body.coupon_code, subtotal);
+    if (cr.error) return { status: 400, body: { error: 'الكوبون: ' + cr.error } };
+    discount = cr.discount; couponCode = cr.code;
+  }
+  const total = Math.max(0, Math.round((subtotal + fee - discount) * 100) / 100);
+  const info = run(`INSERT INTO orders (customer_name, phone, address, notes, items_json, total, status, source, created_at, customer_id, latitude, longitude, delivery_fee, delivery_method, paid, coupon_code, discount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     name.slice(0, 120), normalizePhone(phone).slice(0, 40) || phone.slice(0, 40), str(body.address).slice(0, 300), str(body.notes).slice(0, 500),
     JSON.stringify(clean), total, 'جديد', 'المتجر', now(), customer?.id || 0,
-    num(customer?.latitude || body.latitude), num(customer?.longitude || body.longitude), fee, method, 0);
+    num(customer?.latitude || body.latitude), num(customer?.longitude || body.longitude), fee, method, 0,
+    couponCode, discount);
+  if (couponCode) run('UPDATE coupons SET used_count = used_count + 1 WHERE upper(code)=upper(?)', couponCode);
   for (const i of clean) {
     if (i.id <= 0) continue;
     const p = get('SELECT variants_json FROM products WHERE id=?', i.id);
@@ -329,6 +338,84 @@ add('POST', '/api/store/orders', ({ body, customer }) => {
   }
   return { ok: true, orderId: Number(info.lastInsertRowid), total };
 });
+
+// ------------------------- كوبونات الخصم (تحقق عام) -------------------------
+function calcCoupon(code, subtotal) {
+  const c = get('SELECT * FROM coupons WHERE upper(code)=upper(?)', str(code).slice(0, 40));
+  if (!c) return { error: 'كوبون غير موجود' };
+  if (!Number(c.active)) return { error: 'هذا الكوبون غير مفعّل' };
+  const today = now().slice(0, 10);
+  if (c.starts_at && today < String(c.starts_at).slice(0, 10)) return { error: 'هذا الكوبون لم يبدأ بعد' };
+  if (c.ends_at && today > String(c.ends_at).slice(0, 10)) return { error: 'انتهت صلاحية الكوبون' };
+  if (Number(c.max_uses) > 0 && Number(c.used_count) >= Number(c.max_uses)) return { error: 'اكتمل استخدام هذا الكوبون' };
+  if (subtotal < num(c.min_total)) return { error: `الحد الأدنى لاستخدام الكوبون ${num(c.min_total)}` };
+  let discount = 0;
+  if (c.type === 'fixed') discount = Math.min(subtotal, num(c.value));
+  else discount = Math.min(subtotal, Math.round(subtotal * Math.min(100, num(c.value)) / 100 * 100) / 100);
+  discount = Math.round(discount * 100) / 100;
+  if (discount <= 0) return { error: 'قيمة الكوبون غير صالحة' };
+  return { ok: true, code: c.code, type: c.type, value: num(c.value), discount };
+}
+add('POST', '/api/coupons/validate', ({ body }) => {
+  const subtotal = num(body.subtotal);
+  if (subtotal <= 0) return { status: 400, body: { error: 'أدخل مجموع السلة' } };
+  const r = calcCoupon(body.code, subtotal);
+  return r.error ? { status: 400, body: r } : r;
+});
+
+// ------------------------- إعلام عند توفر المنتج -------------------------
+add('POST', '/api/stock-alerts', ({ body }) => {
+  const pid = num(body.product_id);
+  const phone = str(body.phone).replace(/[^\d+]/g, '').slice(0, 20);
+  if (pid <= 0 || phone.length < 7) return { status: 400, body: { error: 'رقم جوال صحيح مطلوب' } };
+  const p = get('SELECT id, name_ar FROM products WHERE id=?', pid);
+  if (!p) return { status: 404, body: { error: 'المنتج غير موجود' } };
+  const dup = get('SELECT id FROM stock_alerts WHERE product_id=? AND phone=? AND notified=0', pid, phone);
+  if (dup) return { ok: true, already: true };
+  run('INSERT INTO stock_alerts (product_id, phone, color, size, notified, created_at) VALUES (?,?,?,?,0,?)',
+    pid, phone, str(body.color).slice(0, 80), str(body.size).slice(0, 80), now());
+  return { ok: true };
+});
+
+// ------------------------- مسارات الأدمن: الكوبونات -------------------------
+add('GET', '/api/admin/coupons', () => ({
+  items: all('SELECT * FROM coupons ORDER BY id DESC'),
+  alerts: all(`SELECT a.*, p.name_ar FROM stock_alerts a LEFT JOIN products p ON p.id=a.product_id ORDER BY a.id DESC LIMIT 200`),
+}), { auth: true });
+add('POST', '/api/admin/coupons', ({ body }) => {
+  const code = str(body.code).toUpperCase().replace(/\s+/g, '');
+  if (code.length < 3) return { status: 400, body: { error: 'الكود 3 أحرف على الأقل' } };
+  const value = num(body.value);
+  if (value <= 0) return { status: 400, body: { error: 'قيمة الخصم مطلوبة' } };
+  if (get('SELECT id FROM coupons WHERE upper(code)=upper(?)', code)) return { status: 400, body: { error: 'هذا الكود موجود مسبقاً' } };
+  const info = run('INSERT INTO coupons (code,type,value,min_total,max_uses,used_count,active,starts_at,ends_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    code, body.type === 'fixed' ? 'fixed' : 'percent', Math.min(100000, value), Math.max(0, num(body.min_total)),
+    Math.max(0, Math.floor(num(body.max_uses))), 0, body.active === false ? 0 : 1,
+    str(body.starts_at).slice(0, 10), str(body.ends_at).slice(0, 10), now());
+  return { ok: true, id: Number(info.lastInsertRowid) };
+}, { auth: true });
+add('PUT', '/api/admin/coupons/:id', ({ params, body }) => {
+  const c = get('SELECT * FROM coupons WHERE id=?', num(params.id));
+  if (!c) return { status: 404, body: { error: 'غير موجود' } };
+  run('UPDATE coupons SET type=?, value=?, min_total=?, max_uses=?, active=?, starts_at=?, ends_at=? WHERE id=?',
+    body.type === 'fixed' ? 'fixed' : 'percent', body.value !== undefined ? Math.min(100000, num(body.value)) : num(c.value),
+    body.min_total !== undefined ? Math.max(0, num(body.min_total)) : num(c.min_total),
+    body.max_uses !== undefined ? Math.max(0, Math.floor(num(body.max_uses))) : num(c.max_uses),
+    body.active === false ? 0 : 1,
+    str(body.starts_at).slice(0, 10) || String(c.starts_at || ''), str(body.ends_at).slice(0, 10) || String(c.ends_at || ''), num(params.id));
+  return { ok: true };
+}, { auth: true });
+add('DELETE', '/api/admin/coupons/:id', ({ params }) => { run('DELETE FROM coupons WHERE id=?', num(params.id)); return { ok: true }; }, { auth: true });
+add('POST', '/api/admin/stock-alerts/:id/notify', async ({ params }) => {
+  const a = get('SELECT * FROM stock_alerts WHERE id=?', num(params.id));
+  if (!a) return { status: 404, body: { error: 'غير موجود' } };
+  const p = get('SELECT name_ar FROM products WHERE id=?', a.product_id);
+  run('UPDATE stock_alerts SET notified=1 WHERE id=?', num(params.id));
+  const body = `المنتج «${p?.name_ar || 'المنتج'}» أصبح متوفراً الآن — اطلب قبل نفاد الكمية! 🛍️`;
+  const sent = await pushToAll('🟢 المنتج متوفر الآن', body, '/#p' + a.product_id);
+  return { ok: true, pushed: sent };
+}, { auth: true });
+add('DELETE', '/api/admin/stock-alerts/:id', ({ params }) => { run('DELETE FROM stock_alerts WHERE id=?', num(params.id)); return { ok: true }; }, { auth: true });
 
 add('POST', '/api/auth/login', ({ body, res, req }) => {
   const username = str(body.username);

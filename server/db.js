@@ -202,6 +202,33 @@ ensureColumn('orders', 'delivery_fee', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('orders', 'delivery_method', "TEXT NOT NULL DEFAULT 'توصيل للمنزل'");
 ensureColumn('orders', 'psid', 'TEXT NOT NULL DEFAULT \'\'');
 ensureColumn('orders', 'paid', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('orders', 'coupon_code', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('orders', 'discount', 'REAL NOT NULL DEFAULT 0');
+// ------------------------- كوبونات الخصم -------------------------
+db.exec(`CREATE TABLE IF NOT EXISTS coupons (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL DEFAULT 'percent',       -- percent | fixed
+  value REAL NOT NULL DEFAULT 0,
+  min_total REAL NOT NULL DEFAULT 0,
+  max_uses INTEGER NOT NULL DEFAULT 0,        -- 0 = بلا حد
+  used_count INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  starts_at TEXT NOT NULL DEFAULT '',
+  ends_at TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);`);
+// ------------------------- طلبات إعلام عند توفر المنتج -------------------------
+db.exec(`CREATE TABLE IF NOT EXISTS stock_alerts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  phone TEXT NOT NULL DEFAULT '',
+  color TEXT NOT NULL DEFAULT '',
+  size TEXT NOT NULL DEFAULT '',
+  notified INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_stock_alerts_product ON stock_alerts(product_id);');
 ensureColumn('customers', 'email', 'TEXT');
 ensureColumn('customers', 'verified', 'INTEGER NOT NULL DEFAULT 0');
 db.exec('CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);');

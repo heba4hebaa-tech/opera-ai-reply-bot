@@ -21,6 +21,7 @@
     <button class="nav-item" data-section="replies"><span class="ico">💬</span><span>ردود مخصصة</span></button>
     <button class="nav-item" data-section="notifications"><span class="ico">🔔</span><span>التنبيهات</span></button>
     <button class="nav-item" data-section="ads"><span class="ico">📣</span><span>الإعلانات</span></button>
+    <button class="nav-item" data-section="coupons"><span class="ico">🎟️</span><span>كوبونات وتنبيهات</span></button>
     <div class="nav-sep"></div>
     <button class="nav-item" data-section="tester"><span class="ico">🧪</span><span>اختبار الرد</span></button>
     <button class="nav-item" data-section="settings"><span class="ico">⚙️</span><span>الإعدادات</span></button>
@@ -149,6 +150,14 @@
         </div>
         <div class="card"><div class="table-wrap"><table><thead><tr><th>العنوان</th><th>النوع</th><th>المكان</th><th>أولوية</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="adRows"></tbody></table></div></div>
         <p class="small muted">النوع: لافتة / ترويج / شات. المكان: متجر / مسنجر / واتساب / شات / الكل. المتغيرات في النص مثل {business}.</p>
+      </section>
+
+      <!-- coupons + stock alerts -->
+      <section class="section" id="sec-coupons">
+        <div class="section-head"><div><h2>🎟️ كوبونات الخصم</h2><p class="muted small">أنشئ أكواد خصم تُطبَّق تلقائياً في سلة الزبون (نسبة مئوية أو مبلغ ثابت)</p></div><button class="btn btn-primary" id="addCoupon">+ كوبون جديد</button></div>
+        <div class="card" style="margin-bottom:20px;"><div class="table-wrap"><table><thead><tr><th>الكود</th><th>الخصم</th><th>الحد الأدنى</th><th>الاستخدام</th><th>الصلاحية</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="couponRows"></tbody></table></div></div>
+        <div class="section-head"><div><h2>🔔 طلبات «أخطرني عند التوفر»</h2><p class="muted small">زبائن انتظروا عودة منتج نفد — اضغط «إشعار» لإرسال إشعار فوري لكل مشتركين التطبيق</p></div></div>
+        <div class="card"><div class="table-wrap"><table><thead><tr><th>المنتج</th><th>الجوال</th><th>اللون/المقاس</th><th>التاريخ</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="alertRows"></tbody></table></div></div>
       </section>
 
       <!-- tester -->

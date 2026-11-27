@@ -692,3 +692,66 @@ html:not([data-theme="dark"]) .site-footer .ft-copy { border-top-color: var(--ap
   color: #fff; border-color: transparent; box-shadow: 0 6px 14px -7px rgba(15,118,110,.9);
 }
 .c-size.oos { opacity: .35; text-decoration: line-through; cursor: not-allowed; }
+
+/* ============================================================
+   ميزات إضافية: اقتراحات البحث، الترتيب، العدّاد، تنبيه التوفر
+   ============================================================ */
+
+/* ---------------- اقتراحات البحث الفورية ---------------- */
+.search-suggest {
+  position: absolute; top: calc(100% + 8px); inset-inline: 0; z-index: 70;
+  background: var(--app-card); border: 1px solid var(--app-line); border-radius: 18px;
+  box-shadow: var(--app-shadow-lg); overflow: hidden; max-height: 320px; overflow-y: auto;
+  animation: cardUp .25s var(--app-ease);
+}
+.sg-item {
+  display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 13px;
+  background: none; border: 0; border-bottom: 1px solid var(--app-line); cursor: pointer;
+  font-family: inherit; text-align: start; transition: background .15s;
+}
+.sg-item:last-child { border-bottom: 0; }
+.sg-item:hover, .sg-item:active { background: linear-gradient(135deg, rgba(15,118,110,.1), rgba(20,184,166,.14)); }
+.sg-ic { width: 42px; height: 42px; border-radius: 12px; overflow: hidden; flex: 0 0 42px; display: grid; place-items: center; background: var(--app-bg); font-size: 20px; }
+.sg-ic img { width: 100%; height: 100%; object-fit: cover; }
+.sg-txt { min-width: 0; }
+.sg-txt b { display: block; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-txt small { font-size: 11.5px; color: var(--app-brand-ink); font-weight: 700; }
+
+/* ---------------- شريط الترتيب ---------------- */
+.sort-bar { display: flex; gap: 7px; overflow-x: auto; align-items: center; padding: 2px 0 12px; }
+.sort-lab { font-size: 11.5px; font-weight: 800; color: var(--app-muted); flex: 0 0 auto; }
+.s-btn {
+  flex: 0 0 auto; border: 1.5px solid var(--app-line); background: var(--app-card); color: var(--app-ink);
+  border-radius: 99px; padding: 7px 14px; font-size: 12px; font-weight: 800; cursor: pointer;
+  font-family: inherit; transition: all .2s var(--app-ease); white-space: nowrap;
+}
+.s-btn:hover { border-color: var(--app-brand-2); transform: translateY(-1px); }
+.s-btn:active { transform: scale(.94); }
+.s-btn.active { background: linear-gradient(135deg, var(--app-brand), var(--app-brand-2)); color: #fff; border-color: transparent; box-shadow: 0 8px 18px -10px rgba(15,118,110,.9); }
+
+/* ---------------- عدّاد العروض ---------------- */
+.deal-timer {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 7px;
+  background: linear-gradient(135deg, #dc2626, #f97316); color: #fff;
+  font-size: 12.5px; font-weight: 900; font-family: ui-monospace, monospace;
+  padding: 5px 13px; border-radius: 99px; box-shadow: 0 8px 18px -10px rgba(220,38,38,.9);
+  animation: timerPulse 2s ease-in-out infinite;
+}
+@keyframes timerPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+
+/* ---------------- تنبيه «أخطرني عند التوفر» ---------------- */
+.stock-alert-box {
+  background: linear-gradient(135deg, rgba(15,118,110,.1), rgba(20,184,166,.16));
+  border: 1.5px dashed var(--app-brand-2); border-radius: 16px; padding: 14px; margin-top: 12px;
+}
+.stock-alert-box b { font-size: 14px; display: block; margin-bottom: 4px; }
+.stock-alert-box p { margin: 0 0 10px; font-size: 12px; color: var(--app-muted); }
+.stock-alert-box input {
+  border: 1.5px solid var(--app-line); background: var(--app-card); color: var(--app-ink);
+  border-radius: 12px; padding: 10px 13px; font-size: 14px; outline: none; font-family: inherit;
+}
+.stock-alert-box input:focus { border-color: var(--app-brand-2); }
+
+/* ---------------- زر واتساب في نافذة المنتج ---------------- */
+#pm_wa { background: #25d3661f; color: #128c4a; border-color: #25d36655; }
+html[data-theme="dark"] #pm_wa { color: #4ade80; }
